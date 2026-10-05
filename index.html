@@ -71,15 +71,64 @@
   <!-- Ambient Cursor Spotlight Glow -->
   <div class="cursor-spotlight" id="cursorSpotlight"></div>
 
-  <!-- Antigravity Zero-G Canvas Layer -->
-  <canvas id="antigravityCanvas" class="antigravity-canvas"></canvas>
+  <!-- Professional Profile Spotlight Lightbox Modal -->
+  <div class="profile-modal-overlay" id="profileModal" style="display: none;" onclick="closeProfileModal(event)">
+    <div class="profile-modal-card" onclick="event.stopPropagation()">
+      <button class="profile-modal-close" onclick="closeProfileModal()" aria-label="Close Profile Modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
 
-  <!-- Antigravity Floating HUD Toast -->
-  <div class="antigravity-hud" id="antigravityHud">
-    <div class="antigravity-hud-content">
-      <i class="fa-solid fa-atom"></i>
-      <span><strong>ANTIGRAVITY ENGAGED:</strong> Zero-G Mode Active</span>
-      <button class="hud-close-btn" onclick="toggleAntigravity(false)">Restore Gravity</button>
+      <div class="profile-modal-content">
+        <div class="profile-modal-img-wrap">
+          <img src="images/avatar.jpg" alt="Shahin Sha Chakkingathodi" class="profile-modal-img">
+          <div class="profile-modal-status-badge mono">
+            <span class="status-dot"></span> Available for Roles
+          </div>
+        </div>
+
+        <div class="profile-modal-details">
+          <div class="profile-modal-header">
+            <span class="badge badge-cyan mono">VERIFIED ENGINEER</span>
+            <h3 class="profile-modal-name">Shahin Sha Chakkingathodi</h3>
+            <p class="profile-modal-role mono">Full-Stack Developer &amp; CS Engineering Student</p>
+          </div>
+
+          <p class="profile-modal-bio">
+            Focused on scalable backend engineering, clean REST APIs, relational PostgreSQL databases, and modern responsive frontend systems. Currently expanding into Cloud &amp; DevOps.
+          </p>
+
+          <div class="profile-modal-specs-grid mono">
+            <div class="spec-cell">
+              <span class="spec-lbl"><i class="fa-solid fa-location-dot" style="color: var(--accent);"></i> Location</span>
+              <span class="spec-val">Kerala, India</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-lbl"><i class="fa-solid fa-code-commit" style="color: var(--accent);"></i> GitHub Commits</span>
+              <span class="spec-val">1,050+ / Year</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-lbl"><i class="fa-solid fa-envelope" style="color: var(--accent);"></i> Direct Email</span>
+              <span class="spec-val">shahin.c.sha@gmail.com</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-lbl"><i class="fa-solid fa-graduation-cap" style="color: var(--accent);"></i> Degree</span>
+              <span class="spec-val">B.Tech in CSE</span>
+            </div>
+          </div>
+
+          <div class="profile-modal-actions">
+            <a href="resume/resume.pdf" target="_blank" rel="noopener noreferrer" class="btn btn--primary">
+              <i class="fa-regular fa-file-pdf"></i> Download Resume
+            </a>
+            <a href="https://www.linkedin.com/in/shahin-sha-chakkingathodi" target="_blank" rel="noopener noreferrer" class="btn btn--outline">
+              <i class="fa-brands fa-linkedin-in"></i> LinkedIn
+            </a>
+            <a href="https://github.com/Shahinshac" target="_blank" rel="noopener noreferrer" class="btn btn--outline">
+              <i class="fa-brands fa-github"></i> GitHub
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -253,9 +302,9 @@
 
       <!-- Right Column: portrait photo + floating quote card -->
       <div class="hero__visual">
-        <div class="hero__portrait-wrap" id="heroPortraitWrap" onclick="triggerPhotoAntigravity(event)" title="Click to activate Antigravity Zero-G Mode!">
-          <div class="antigravity-badge mono">
-            <i class="fa-solid fa-atom"></i> Antigravity Mode
+        <div class="hero__portrait-wrap" id="heroPortraitWrap" onclick="openProfileModal()" title="Click to view verified developer profile">
+          <div class="portrait-badge mono">
+            <i class="fa-solid fa-expand"></i> View Profile
           </div>
           <img class="hero__portrait" src="images/avatar.jpg" alt="Shahin Sha Chakkingathodi - Full-Stack Developer">
           <div class="hero__portrait-caption">
@@ -2238,92 +2287,36 @@
       });
     });
 
-    // 5. Antigravity Zero-G System on Profile Photo Click
-    let antigravityActive = false;
-    let antigravityAnimId = null;
-    let particles = [];
-
-    function triggerPhotoAntigravity(e) {
-      toggleAntigravity(!antigravityActive);
+    // 5. Professional Profile Spotlight Modal
+    function openProfileModal() {
+      const modal = document.getElementById('profileModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
     }
 
-    function toggleAntigravity(activate) {
-      antigravityActive = activate;
-      const hud = document.getElementById('antigravityHud');
-      const canvas = document.getElementById('antigravityCanvas');
-
-      if (antigravityActive) {
-        document.body.classList.add('antigravity-active');
-        if (hud) hud.classList.add('is-visible');
-        if (canvas) {
-          canvas.style.display = 'block';
-          initAntigravityParticles();
-        }
-      } else {
-        document.body.classList.remove('antigravity-active');
-        if (hud) hud.classList.remove('is-visible');
-        if (canvas) {
-          canvas.style.display = 'none';
-          cancelAnimationFrame(antigravityAnimId);
+    function closeProfileModal(e) {
+      if (!e || e.target.id === 'profileModal' || e.currentTarget.classList?.contains('profile-modal-close')) {
+        const modal = document.getElementById('profileModal');
+        if (modal) {
+          modal.style.display = 'none';
+          document.body.style.overflow = '';
         }
       }
     }
 
-    function initAntigravityParticles() {
-      const canvas = document.getElementById('antigravityCanvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-
-      function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const profModal = document.getElementById('profileModal');
+        if (profModal && profModal.style.display === 'flex') {
+          profModal.style.display = 'none';
+          document.body.style.overflow = '';
+        }
+        closeProjectModal();
       }
-      resize();
-
-      particles = [];
-      const particleColors = ['#2dd4bf', '#38bdf8', '#818cf8', '#facc15', '#ffffff'];
-      for (let i = 0; i < 70; i++) {
-        particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          radius: Math.random() * 3 + 1,
-          color: particleColors[Math.floor(Math.random() * particleColors.length)],
-          vx: (Math.random() - 0.5) * 1.5,
-          vy: -(Math.random() * 1.8 + 0.5), // Upward anti-gravity float
-          alpha: Math.random() * 0.7 + 0.3,
-          pulse: Math.random() * 0.05 + 0.01
-        });
-      }
-
-      function draw() {
-        if (!antigravityActive) return;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        particles.forEach(p => {
-          p.x += p.vx;
-          p.y += p.vy;
-
-          if (p.y < -10) p.y = canvas.height + 10;
-          if (p.x < -10) p.x = canvas.width + 10;
-          if (p.x > canvas.width + 10) p.x = -10;
-
-          p.alpha += Math.sin(Date.now() * p.pulse) * 0.02;
-          const currentAlpha = Math.max(0.2, Math.min(0.9, p.alpha));
-
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = currentAlpha;
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = p.color;
-          ctx.fill();
-        });
-
-        antigravityAnimId = requestAnimationFrame(draw);
-      }
-
-      draw();
-    }
+    });
   </script>
 
 </body>
