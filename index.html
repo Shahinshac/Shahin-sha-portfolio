@@ -65,6 +65,24 @@
 </head>
 <body>
 
+  <!-- Scroll Reading Progress Bar -->
+  <div class="scroll-progress-bar" id="scrollProgressBar"></div>
+
+  <!-- Ambient Cursor Spotlight Glow -->
+  <div class="cursor-spotlight" id="cursorSpotlight"></div>
+
+  <!-- Antigravity Zero-G Canvas Layer -->
+  <canvas id="antigravityCanvas" class="antigravity-canvas"></canvas>
+
+  <!-- Antigravity Floating HUD Toast -->
+  <div class="antigravity-hud" id="antigravityHud">
+    <div class="antigravity-hud-content">
+      <i class="fa-solid fa-atom"></i>
+      <span><strong>ANTIGRAVITY ENGAGED:</strong> Zero-G Mode Active</span>
+      <button class="hud-close-btn" onclick="toggleAntigravity(false)">Restore Gravity</button>
+    </div>
+  </div>
+
   <!-- =============================================================
        NAVBAR / HEADER
   ============================================================= -->
@@ -160,6 +178,10 @@
           <span class="badge-topic">Cloud &amp; DevOps</span>
         </div>
 
+        <div class="hero__typing-line mono">
+          <span class="typing-prefix">&gt;</span> <span id="typewriterText">Full-Stack Developer</span><span class="typewriter-cursor">_</span>
+        </div>
+
         <h1 class="hero__title">
           SHAHIN SHA <br>
           <span class="text-accent">CHAKKINGATHODI</span>
@@ -231,7 +253,10 @@
 
       <!-- Right Column: portrait photo + floating quote card -->
       <div class="hero__visual">
-        <div class="hero__portrait-wrap">
+        <div class="hero__portrait-wrap" id="heroPortraitWrap" onclick="triggerPhotoAntigravity(event)" title="Click to activate Antigravity Zero-G Mode!">
+          <div class="antigravity-badge mono">
+            <i class="fa-solid fa-atom"></i> Antigravity Mode
+          </div>
           <img class="hero__portrait" src="images/avatar.jpg" alt="Shahin Sha Chakkingathodi - Full-Stack Developer">
           <div class="hero__portrait-caption">
             <span class="name">SHAHIN SHA CHAKKINGATHODI</span>
@@ -2134,6 +2159,171 @@
 
     // Set current year
     document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+    /* =============================================================
+       AESTHETIC ANIMATIONS & ANTIGRAVITY ENGINE
+    ============================================================= */
+
+    // 1. Scroll Reading Progress Bar
+    window.addEventListener('scroll', () => {
+      const winScroll = document.documentElement.scrollTop || document.body.scrollTop;
+      const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      const scrolled = height > 0 ? (winScroll / height) * 100 : 0;
+      const bar = document.getElementById('scrollProgressBar');
+      if (bar) bar.style.width = scrolled + '%';
+    }, { passive: true });
+
+    // 2. Ambient Cursor Spotlight
+    const spotlight = document.getElementById('cursorSpotlight');
+    if (spotlight && window.matchMedia('(hover: hover)').matches) {
+      window.addEventListener('mousemove', (e) => {
+        spotlight.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
+      }, { passive: true });
+    }
+
+    // 3. Dynamic Typewriter Header
+    const typewriterRoles = [
+      'Full-Stack Developer',
+      'Backend Systems & REST APIs',
+      'PostgreSQL & Relational DBs',
+      'Docker & Cloud/DevOps Explorer'
+    ];
+    let roleIdx = 0;
+    let charIdx = 0;
+    let isDeletingRole = false;
+    const typewriterEl = document.getElementById('typewriterText');
+
+    function runTypewriter() {
+      if (!typewriterEl) return;
+      const currentRole = typewriterRoles[roleIdx];
+
+      if (isDeletingRole) {
+        typewriterEl.textContent = currentRole.substring(0, charIdx - 1);
+        charIdx--;
+      } else {
+        typewriterEl.textContent = currentRole.substring(0, charIdx + 1);
+        charIdx++;
+      }
+
+      let speed = isDeletingRole ? 35 : 75;
+
+      if (!isDeletingRole && charIdx === currentRole.length) {
+        speed = 2200; // Pause when complete
+        isDeletingRole = true;
+      } else if (isDeletingRole && charIdx === 0) {
+        isDeletingRole = false;
+        roleIdx = (roleIdx + 1) % typewriterRoles.length;
+        speed = 400;
+      }
+
+      setTimeout(runTypewriter, speed);
+    }
+    setTimeout(runTypewriter, 600);
+
+    // 4. 3D Card Hover Physics
+    const tiltElements = document.querySelectorAll('.project-card, .stat-card, .pillar-card, .principle-card');
+    tiltElements.forEach(el => {
+      el.addEventListener('mousemove', (e) => {
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const rotX = ((y - centerY) / centerY) * -5;
+        const rotY = ((x - centerX) / centerX) * 5;
+        el.style.transform = `perspective(800px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg) translateY(-4px)`;
+      });
+      el.addEventListener('mouseleave', () => {
+        el.style.transform = '';
+      });
+    });
+
+    // 5. Antigravity Zero-G System on Profile Photo Click
+    let antigravityActive = false;
+    let antigravityAnimId = null;
+    let particles = [];
+
+    function triggerPhotoAntigravity(e) {
+      toggleAntigravity(!antigravityActive);
+    }
+
+    function toggleAntigravity(activate) {
+      antigravityActive = activate;
+      const hud = document.getElementById('antigravityHud');
+      const canvas = document.getElementById('antigravityCanvas');
+
+      if (antigravityActive) {
+        document.body.classList.add('antigravity-active');
+        if (hud) hud.classList.add('is-visible');
+        if (canvas) {
+          canvas.style.display = 'block';
+          initAntigravityParticles();
+        }
+      } else {
+        document.body.classList.remove('antigravity-active');
+        if (hud) hud.classList.remove('is-visible');
+        if (canvas) {
+          canvas.style.display = 'none';
+          cancelAnimationFrame(antigravityAnimId);
+        }
+      }
+    }
+
+    function initAntigravityParticles() {
+      const canvas = document.getElementById('antigravityCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      resize();
+
+      particles = [];
+      const particleColors = ['#2dd4bf', '#38bdf8', '#818cf8', '#facc15', '#ffffff'];
+      for (let i = 0; i < 70; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 3 + 1,
+          color: particleColors[Math.floor(Math.random() * particleColors.length)],
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: -(Math.random() * 1.8 + 0.5), // Upward anti-gravity float
+          alpha: Math.random() * 0.7 + 0.3,
+          pulse: Math.random() * 0.05 + 0.01
+        });
+      }
+
+      function draw() {
+        if (!antigravityActive) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+
+          if (p.y < -10) p.y = canvas.height + 10;
+          if (p.x < -10) p.x = canvas.width + 10;
+          if (p.x > canvas.width + 10) p.x = -10;
+
+          p.alpha += Math.sin(Date.now() * p.pulse) * 0.02;
+          const currentAlpha = Math.max(0.2, Math.min(0.9, p.alpha));
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = currentAlpha;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = p.color;
+          ctx.fill();
+        });
+
+        antigravityAnimId = requestAnimationFrame(draw);
+      }
+
+      draw();
+    }
   </script>
 
 </body>
