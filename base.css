@@ -1,0 +1,143 @@
+:root {
+  /* colors */
+  --bg-dark: #071019;         /* page background (near-black navy) */
+  --bg-panel: #0c1a26;        /* card / panel background */
+  --bg-panel-alt: #0f2230;    /* slightly lighter panel */
+  --border-color: #1c2e3b;    /* subtle borders */
+  --text-primary: #f2f6f8;    /* headings / main text */
+  --text-secondary: #93a4b0;  /* paragraphs / muted text */
+  --accent: #2dd4bf;          /* teal accent */
+  --accent-soft: rgba(45, 212, 191, 0.12);
+  --accent-gradient: linear-gradient(90deg, #2dd4bf, #22c1a3);
+
+  /* typography */
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* layout */
+  --max-width: 1280px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+}
+
+.mono { font-family: var(--font-mono); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+}
+.badge-cyan {
+  color: var(--accent);
+  border-color: rgba(45, 212, 191, 0.3);
+  background: var(--accent-soft);
+}
+.badge-indigo {
+  color: #818cf8;
+  border-color: rgba(129, 140, 248, 0.3);
+  background: rgba(129, 140, 248, 0.1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 { font-family: var(--font-heading); color: var(--text-primary); }
+
+a { text-decoration: none; color: inherit; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+ul { list-style: none; }
+img { max-width: 100%; display: block; }
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.section { padding: 100px 0; }
+
+/* Small teal uppercase label used above every section heading, e.g. "MY SKILLS" */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.eyebrow--center { justify-content: center; }
+.eyebrow i { font-size: 12px; }
+
+.text-accent { color: var(--accent); }
+
+.section__title {
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 16px;
+}
+
+.section__subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+  max-width: 620px;
+}
+
+.section__header--center { text-align: center; margin: 0 auto 56px; max-width: 720px; }
+.section__header--split {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 56px;
+  flex-wrap: wrap;
+}
+.section__footer { text-align: center; margin-top: 48px; }
+
+/* Reusable buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 26px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow .2s ease;
+}
+.btn i { font-size: 12px; }
+.btn--primary {
+  background: var(--accent-gradient);
+  color: #04140f;
+  box-shadow: 0 10px 25px -8px rgba(45, 212, 191, 0.6);
+}
+.btn--primary:hover { transform: translateY(-2px); }
+.btn--ghost { color: var(--text-primary); }
+.btn--ghost:hover { color: var(--accent); }
+.btn--outline {
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.btn--outline:hover { border-color: var(--accent); color: var(--accent); }
