@@ -241,11 +241,11 @@ async function loadOverviewMetrics() {
 
   try {
     const [projRes, skillRes, expRes, eduRes, certRes, mediaRes] = await Promise.all([
-      supabase.from('projects').select('id, is_published'),
-      supabase.from('skills').select('id, is_published'),
-      supabase.from('experience').select('id, is_published'),
-      supabase.from('education').select('id, is_published'),
-      supabase.from('certifications').select('id, is_published'),
+      supabase.from('projects').select('id, title, is_published'),
+      supabase.from('skills').select('id, name, is_published'),
+      supabase.from('experience').select('id, role, company, is_published'),
+      supabase.from('education').select('id, degree, institution, is_published'),
+      supabase.from('certifications').select('id, title, is_published'),
       supabase.storage.from('portfolio-media').list('uploads')
     ]);
 
@@ -272,55 +272,72 @@ async function loadOverviewMetrics() {
     const mediaList = mediaRes.data || [];
     document.getElementById('statMedia').textContent = mediaList.length;
 
-    // Detect duplicate records across collections
+    // Detect actual duplicate records across collections
     const projTitles = new Set();
     let dupProjCount = 0;
     projs.forEach(p => {
       const k = (p.title || '').trim().toLowerCase();
-      if (projTitles.has(k)) dupProjCount++;
-      else projTitles.add(k);
+      if (k) {
+        if (projTitles.has(k)) dupProjCount++;
+        else projTitles.add(k);
+      }
     });
 
     const skillNames = new Set();
     let dupSkillCount = 0;
     skills.forEach(s => {
       const k = (s.name || '').trim().toLowerCase();
-      if (skillNames.has(k)) dupSkillCount++;
-      else skillNames.add(k);
+      if (k) {
+        if (skillNames.has(k)) dupSkillCount++;
+        else skillNames.add(k);
+      }
     });
 
     const expRoles = new Set();
     let dupExpCount = 0;
     exp.forEach(e => {
-      const k = `${e.role}:::${e.company}`.trim().toLowerCase();
-      if (expRoles.has(k)) dupExpCount++;
-      else expRoles.add(k);
+      const k = `${(e.role || '').trim()}:::${(e.company || '').trim()}`.toLowerCase();
+      if (k !== ':::') {
+        if (expRoles.has(k)) dupExpCount++;
+        else expRoles.add(k);
+      }
     });
 
     const eduDegs = new Set();
     let dupEduCount = 0;
     edu.forEach(ed => {
-      const k = `${ed.degree}:::${ed.institution}`.trim().toLowerCase();
-      if (eduDegs.has(k)) dupEduCount++;
-      else eduDegs.add(k);
+      const k = `${(ed.degree || '').trim()}:::${(ed.institution || '').trim()}`.toLowerCase();
+      if (k !== ':::') {
+        if (eduDegs.has(k)) dupEduCount++;
+        else eduDegs.add(k);
+      }
     });
 
     const certTitles = new Set();
     let dupCertCount = 0;
     certs.forEach(c => {
       const k = (c.title || '').trim().toLowerCase();
-      if (certTitles.has(k)) dupCertCount++;
-      else certTitles.add(k);
+      if (k) {
+        if (certTitles.has(k)) dupCertCount++;
+        else certTitles.add(k);
+      }
     });
 
     const totalDups = dupProjCount + dupSkillCount + dupExpCount + dupEduCount + dupCertCount;
     const dupBtn = document.getElementById('btnCleanupDups');
     const dupBadge = document.getElementById('dupCountBadge');
-    if (dupBtn && dupBadge) {
+    if (dupBtn) {
       if (totalDups > 0) {
-        dupBadge.textContent = totalDups;
+        if (dupBadge) {
+          dupBadge.textContent = ` (${totalDups})`;
+          dupBadge.style.display = 'inline';
+        }
         dupBtn.style.display = 'inline-flex';
       } else {
+        if (dupBadge) {
+          dupBadge.textContent = '';
+          dupBadge.style.display = 'none';
+        }
         dupBtn.style.display = 'none';
       }
     }
