@@ -1585,12 +1585,13 @@ function confirmDeleteMedia(fileName) {
 
 async function promptImportStaticContent() {
   openConfirmModal(
-    'Seed Portfolio Content',
-    'This will import your 8 primary portfolio projects (HospitalOS, Restaurant POS, Core Banking, etc.) and core skill categories into the database. Existing records will be preserved without duplicate creation. Proceed?',
+    'Import & Synchronize All Portfolio Content',
+    'This will import all 8 verified projects, 22 technical skills, work experience, 3 academic qualifications, 3 certifications, and verified profile records into Supabase. Existing records will be safely preserved without duplicates. Proceed?',
     async () => {
       const supabase = window.getSupabase();
+      if (!supabase) return;
 
-      // 8 Static Portfolio Projects from current index.html
+      // 1. Projects (All 8 verified portfolio systems from index.html)
       const initialProjects = [
         {
           title: 'HospitalOS + PharmacyERP',
@@ -1615,116 +1616,220 @@ async function promptImportStaticContent() {
         {
           title: 'Core Banking System (CBS)',
           category: 'backend',
-          description: 'Secure, ACID-compliant ledger service managing multi-account balances, fund transfers with atomic locks, customer KYC documentation, and strict audit trails.',
-          tags: ['Python', 'FastAPI', 'PostgreSQL', 'SQLAlchemy', 'Pydantic', 'Docker', 'JWT'],
-          github_url: 'https://github.com/Shahinshac/Core-Banking-System-CBS-',
-          live_url: null,
+          description: 'A core financial management engine simulating retail banking workflows, credit assessment schedules, and transactional ledger accounting with strict audit logging.',
+          tags: ['React', 'TypeScript', 'Python Flask', 'Flask-SQLAlchemy', 'PostgreSQL', 'JWT'],
+          github_url: 'https://github.com/Shahinshac/CBS',
+          live_url: 'https://shaahn.vercel.app/',
           display_order: 3,
           is_published: true
         },
         {
-          title: 'E-Commerce Platform Engine',
-          category: 'fullstack',
-          description: 'Modular high-throughput digital storefront and catalog engine with product inventory management, cart persistence, automated invoice generation, and order dispatch.',
-          tags: ['React', 'Node.js', 'Express', 'MongoDB', 'Mongoose', 'TailwindCSS', 'Stripe'],
-          github_url: 'https://github.com/Shahinshac/e-commerce',
-          live_url: 'https://04-e-commerce.vercel.app/',
+          title: 'CoreERP Enterprise Suite',
+          category: 'erp',
+          description: 'Centralized enterprise resource planning platform integrating multi-department employee directories, warehouse inventory dispatch, and financial audit logs into a unified dashboard.',
+          tags: ['React', 'TypeScript', 'Node.js', 'Express', 'PostgreSQL', 'Prisma'],
+          github_url: 'https://github.com/Shahinshac/CoreERP',
+          live_url: 'https://core-erpp.vercel.app/',
           display_order: 4,
           is_published: true
         },
         {
-          title: 'Smart Campus Attendance System',
-          category: 'realtime',
-          description: 'Automated student presence monitoring platform utilizing QR authentication, GPS perimeter verification, and real-time faculty dashboards.',
-          tags: ['React', 'Node.js', 'Express', 'MongoDB', 'Socket.io', 'Leaflet', 'QR-Engine'],
-          github_url: 'https://github.com/Shahinshac/attendance',
-          live_url: null,
+          title: 'Expense Tracker & Financial Analytics',
+          category: 'fullstack',
+          description: 'Interactive personal finance application monitoring expenditures, category budget thresholds, and spending analytics via real-time Chart.js visual graphs.',
+          tags: ['React', 'TypeScript', 'Vite', 'Node.js', 'PostgreSQL', 'Chart.js'],
+          github_url: 'https://github.com/Shahinshac/Expense-Tracker',
+          live_url: 'https://expensfi.vercel.app/',
           display_order: 5,
           is_published: true
         },
         {
-          title: 'Dockerized Microservices CI/CD Pipeline',
-          category: 'backend',
-          description: 'Containerized multi-tier deployment environment leveraging GitHub Actions pipelines, Docker Compose orchestration, and automated Nginx reverse proxy routing.',
-          tags: ['Docker', 'GitHub Actions', 'Nginx', 'Linux', 'Bash', 'Prometheus', 'Grafana'],
-          github_url: 'https://github.com/Shahinshac',
-          live_url: null,
+          title: 'Yumm (Nex-Food) Ordering Platform',
+          category: 'fullstack',
+          description: 'Modern food ordering platform featuring restaurant menus, dynamic multi-item cart calculations, persistent checkout flows, and responsive mobile-first UI.',
+          tags: ['Next.js', 'TypeScript', 'Node.js', 'PostgreSQL', 'TailwindCSS'],
+          github_url: 'https://github.com/Shahinshac/Yumm',
+          live_url: 'https://nex-food.vercel.app',
           display_order: 6,
           is_published: true
         },
         {
-          title: 'ML Credit Risk Prediction Engine',
+          title: 'AI Resume Screening & Ranking',
           category: 'python',
-          description: 'Predictive loan default assessment pipeline with automated data preprocessing, feature engineering, and model evaluation.',
-          tags: ['Python', 'Scikit-Learn', 'Pandas', 'NumPy', 'FastAPI', 'Matplotlib', 'Seaborn'],
-          github_url: 'https://github.com/Shahinshac',
+          description: 'Recruitment intelligence tool parsing candidate resumes from PDFs, tokenizing skills, and ranking applicants against job descriptions using TF-IDF and cosine similarity.',
+          tags: ['Python', 'Flask', 'NLP', 'scikit-learn', 'PyPDF2', 'Pandas'],
+          github_url: 'https://github.com/Shahinshac/AI-Resume-screening',
           live_url: null,
           display_order: 7,
           is_published: true
         },
         {
-          title: 'TaskFlow ERP & Team Collaboration',
+          title: 'Company Management System',
           category: 'fullstack',
-          description: 'Project planning and team task tracking platform featuring real-time activity feeds, Kanban board state synchronization, and permission-based team workspaces.',
-          tags: ['TypeScript', 'React', 'Node.js', 'PostgreSQL', 'Socket.io', 'Redis', 'TailwindCSS'],
-          github_url: 'https://github.com/Shahinshac',
-          live_url: null,
+          description: 'Corporate hierarchy and employee operations portal featuring organizational department tree navigation, role-based access audits, and leave request tracking.',
+          tags: ['JavaScript', 'React', 'Node.js', 'Express', 'MongoDB'],
+          github_url: 'https://github.com/Shahinshac/company-management-system',
+          live_url: 'https://company-managament.vercel.app/login.html',
           display_order: 8,
           is_published: true
         }
       ];
 
-      // Check existing projects to prevent duplicates
-      const { data: existing } = await supabase.from('projects').select('title');
-      const existingTitles = new Set((existing || []).map(p => p.title.toLowerCase()));
-
-      const toInsert = initialProjects.filter(p => !existingTitles.has(p.title.toLowerCase()));
-
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from('projects').insert(toInsert);
-        if (error) {
-          showToast('Import error: ' + error.message, 'error');
-          return;
-        }
+      const { data: existingProjects } = await supabase.from('projects').select('title');
+      const existingTitles = new Set((existingProjects || []).map(p => p.title.toLowerCase()));
+      const projsToInsert = initialProjects.filter(p => !existingTitles.has(p.title.toLowerCase()));
+      if (projsToInsert.length > 0) {
+        await supabase.from('projects').insert(projsToInsert);
       }
 
-      // Initial Skills
+      // 2. Skills (22 verified core skills)
       const initialSkills = [
-        { name: 'TypeScript', category: 'Languages', proficiency: 90, icon_class: 'fa-brands fa-js', display_order: 1, is_published: true },
-        { name: 'JavaScript (ES6+)', category: 'Languages', proficiency: 95, icon_class: 'fa-brands fa-js', display_order: 2, is_published: true },
+        { name: 'JavaScript (ES6+)', category: 'Languages', proficiency: 95, icon_class: 'fa-brands fa-js', display_order: 1, is_published: true },
+        { name: 'TypeScript', category: 'Languages', proficiency: 90, icon_class: 'fa-brands fa-js', display_order: 2, is_published: true },
         { name: 'Python', category: 'Languages', proficiency: 85, icon_class: 'fa-brands fa-python', display_order: 3, is_published: true },
-        { name: 'React', category: 'Frontend', proficiency: 92, icon_class: 'fa-brands fa-react', display_order: 1, is_published: true },
-        { name: 'Next.js', category: 'Frontend', proficiency: 88, icon_class: 'fa-solid fa-n', display_order: 2, is_published: true },
+        { name: 'Java', category: 'Languages', proficiency: 75, icon_class: 'fa-brands fa-java', display_order: 4, is_published: true },
+        { name: 'C#', category: 'Languages', proficiency: 72, icon_class: 'fa-solid fa-code', display_order: 5, is_published: true },
+        { name: 'React', category: 'Frontend', proficiency: 94, icon_class: 'fa-brands fa-react', display_order: 1, is_published: true },
+        { name: 'Next.js', category: 'Frontend', proficiency: 90, icon_class: 'fa-solid fa-n', display_order: 2, is_published: true },
         { name: 'HTML5 / Modern CSS', category: 'Frontend', proficiency: 96, icon_class: 'fa-brands fa-html5', display_order: 3, is_published: true },
-        { name: 'Node.js & Express', category: 'Backend', proficiency: 90, icon_class: 'fa-brands fa-node-js', display_order: 1, is_published: true },
-        { name: 'NestJS', category: 'Backend', proficiency: 84, icon_class: 'fa-solid fa-network-wired', display_order: 2, is_published: true },
-        { name: 'FastAPI', category: 'Backend', proficiency: 82, icon_class: 'fa-solid fa-bolt', display_order: 3, is_published: true },
-        { name: 'PostgreSQL', category: 'Databases', proficiency: 88, icon_class: 'fa-solid fa-database', display_order: 1, is_published: true },
-        { name: 'MongoDB', category: 'Databases', proficiency: 85, icon_class: 'fa-solid fa-leaf', display_order: 2, is_published: true },
-        { name: 'Docker & Compose', category: 'Cloud & DevOps', proficiency: 82, icon_class: 'fa-brands fa-docker', display_order: 1, is_published: true },
-        { name: 'Git & GitHub Actions', category: 'Cloud & DevOps', proficiency: 88, icon_class: 'fa-brands fa-git-alt', display_order: 2, is_published: true }
+        { name: 'Vite', category: 'Frontend', proficiency: 88, icon_class: 'fa-solid fa-bolt', display_order: 4, is_published: true },
+        { name: 'Tailwind CSS', category: 'Frontend', proficiency: 86, icon_class: 'fa-solid fa-wind', display_order: 5, is_published: true },
+        { name: 'NestJS', category: 'Backend', proficiency: 90, icon_class: 'fa-solid fa-server', display_order: 1, is_published: true },
+        { name: 'Node.js & Express', category: 'Backend', proficiency: 92, icon_class: 'fa-brands fa-node-js', display_order: 2, is_published: true },
+        { name: 'Python & Flask', category: 'Backend', proficiency: 85, icon_class: 'fa-brands fa-python', display_order: 3, is_published: true },
+        { name: 'REST APIs', category: 'Backend', proficiency: 92, icon_class: 'fa-solid fa-network-wired', display_order: 4, is_published: true },
+        { name: 'WebSockets', category: 'Backend', proficiency: 86, icon_class: 'fa-solid fa-bolt-lightning', display_order: 5, is_published: true },
+        { name: 'PostgreSQL', category: 'Databases', proficiency: 90, icon_class: 'fa-solid fa-database', display_order: 1, is_published: true },
+        { name: 'Prisma ORM', category: 'Databases', proficiency: 88, icon_class: 'fa-solid fa-database', display_order: 2, is_published: true },
+        { name: 'MongoDB', category: 'Databases', proficiency: 84, icon_class: 'fa-solid fa-leaf', display_order: 3, is_published: true },
+        { name: 'Flask-SQLAlchemy', category: 'Databases', proficiency: 82, icon_class: 'fa-solid fa-database', display_order: 4, is_published: true },
+        { name: 'Docker & Containers', category: 'Cloud & DevOps', proficiency: 82, icon_class: 'fa-brands fa-docker', display_order: 1, is_published: true },
+        { name: 'Git & GitHub Actions', category: 'Cloud & DevOps', proficiency: 88, icon_class: 'fa-brands fa-git-alt', display_order: 2, is_published: true },
+        { name: 'Linux & Bash', category: 'Cloud & DevOps', proficiency: 80, icon_class: 'fa-brands fa-linux', display_order: 3, is_published: true }
       ];
 
       const { data: existingSkills } = await supabase.from('skills').select('name');
       const existingSkillNames = new Set((existingSkills || []).map(s => s.name.toLowerCase()));
       const skillsToInsert = initialSkills.filter(s => !existingSkillNames.has(s.name.toLowerCase()));
-
       if (skillsToInsert.length > 0) {
         await supabase.from('skills').insert(skillsToInsert);
       }
 
-      // Initial Public Profile
+      // 3. Experience
+      const initialExperience = [
+        {
+          role: 'Front-End Web Development Intern',
+          company: 'CoreMicron Enterprises LLP',
+          location: 'Kottakkal, Kerala, India',
+          start_date: 'June 2026',
+          end_date: 'June 2026',
+          is_current: false,
+          description: 'Completed Front-End Web Development Internship gaining practical experience in developing responsive, user-friendly web pages and ERP invoice modules.',
+          highlights: [
+            'Developed responsive and user-friendly web pages using HTML, CSS, Bootstrap, and JavaScript',
+            'Contributed to ERP invoice module development and web application customization',
+            'Implemented interactive UI components and client-side form verification'
+          ],
+          display_order: 1,
+          is_published: true
+        }
+      ];
+      const { data: existingExp } = await supabase.from('experience').select('role, company');
+      const expSet = new Set((existingExp || []).map(e => `${e.role}:::${e.company}`.toLowerCase()));
+      const expToInsert = initialExperience.filter(e => !expSet.has(`${e.role}:::${e.company}`.toLowerCase()));
+      if (expToInsert.length > 0) {
+        await supabase.from('experience').insert(expToInsert);
+      }
+
+      // 4. Education
+      const initialEducation = [
+        {
+          institution: 'MEA Engineering College, Malappuram (APJ Abdul Kalam Technological University)',
+          degree: 'B.Tech in Computer Science & Engineering',
+          field_of_study: 'Computer Science and Engineering',
+          start_date: '2024',
+          end_date: 'Present',
+          grade: 'Currently pursuing third year',
+          display_order: 1,
+          is_published: true
+        },
+        {
+          institution: 'GHSS Kadungapuram, Malappuram, Kerala',
+          degree: 'Higher Secondary Education',
+          field_of_study: 'Biology Science & Computer Science',
+          start_date: '2022',
+          end_date: '2024',
+          grade: 'Higher Secondary',
+          display_order: 2,
+          is_published: true
+        },
+        {
+          institution: 'GHSS Kadungapuram, Kerala',
+          degree: 'Secondary School Leaving Certificate (SSLC)',
+          field_of_study: 'Science & Mathematics',
+          start_date: '2021',
+          end_date: '2022',
+          grade: 'SSLC',
+          display_order: 3,
+          is_published: true
+        }
+      ];
+      const { data: existingEdu } = await supabase.from('education').select('degree');
+      const eduSet = new Set((existingEdu || []).map(e => e.degree.toLowerCase()));
+      const eduToInsert = initialEducation.filter(e => !eduSet.has(e.degree.toLowerCase()));
+      if (eduToInsert.length > 0) {
+        await supabase.from('education').insert(eduToInsert);
+      }
+
+      // 5. Certifications
+      const initialCerts = [
+        {
+          title: 'Digital 101 – 30 Hours',
+          issuer: 'FutureSkills Prime – NASSCOM',
+          issue_date: 'May 2025',
+          credential_id: null,
+          credential_url: null,
+          display_order: 1,
+          is_published: true
+        },
+        {
+          title: 'Certificate Course in Cyber Awareness AI Basic',
+          issuer: 'NIIT Foundation – Cyber Suraksha Plus Program',
+          issue_date: 'August 2026',
+          credential_id: null,
+          credential_url: null,
+          display_order: 2,
+          is_published: true
+        },
+        {
+          title: 'Foundations of AI: Principles, Applications, and Future Trends',
+          issuer: 'Additional Skill Acquisition Programme (ASAP Kerala) & 360DigiTMG',
+          issue_date: '2025',
+          credential_id: null,
+          credential_url: null,
+          display_order: 3,
+          is_published: true
+        }
+      ];
+      const { data: existingCerts } = await supabase.from('certifications').select('title');
+      const certSet = new Set((existingCerts || []).map(c => c.title.toLowerCase()));
+      const certsToInsert = initialCerts.filter(c => !certSet.has(c.title.toLowerCase()));
+      if (certsToInsert.length > 0) {
+        await supabase.from('certifications').insert(certsToInsert);
+      }
+
+      // 6. Public Profile
       const { data: existingProfile } = await supabase.from('public_profiles').select('id').limit(1).maybeSingle();
       if (!existingProfile) {
         await supabase.from('public_profiles').insert([{
           full_name: 'Shahin Sha Chakkingathodi',
           headline: 'Full-Stack Developer & CS Engineering Student',
-          bio: 'Focused on scalable backend engineering, clean REST APIs, relational PostgreSQL databases, and modern responsive frontend systems. Currently expanding into Cloud & DevOps.',
-          location: 'Kerala, India',
-          avatar_url: 'images/profile.jpg',
+          bio: 'Self-motivated B.Tech Computer Science and Engineering student at MEA Engineering College, Malappuram. Passionate about developing practical and user-friendly software solutions with an interest in full-stack development, front-end development, and backend systems. Currently expanding into Cloud & DevOps.',
+          location: 'Malappuram, Kerala, India',
+          avatar_url: 'images/avatar.jpg',
           social_links: {
             github: 'https://github.com/Shahinshac',
-            linkedin: 'https://www.linkedin.com/in/shahin-sha-chakkingathodi',
+            linkedin: 'https://www.linkedin.com/in/shahinshac',
             twitter: 'https://x.com/shaahn_c',
             instagram: 'https://instagram.com/shaahn_c'
           },
@@ -1732,7 +1837,18 @@ async function promptImportStaticContent() {
         }]);
       }
 
-      showToast(`Imported ${toInsert.length} projects and ${skillsToInsert.length} skills!`, 'success');
+      // 7. Private Admin Profile
+      const { data: existingPrivate } = await supabase.from('admin_profile_private').select('id').limit(1).maybeSingle();
+      if (!existingPrivate) {
+        await supabase.from('admin_profile_private').insert([{
+          email: 'shahin.c.sha@gmail.com',
+          phone: '+917594012761',
+          address: 'Malappuram, Kerala, India',
+          notes: 'Primary administrator account for portfolio CMS management.'
+        }]);
+      }
+
+      showToast(`Synchronized ${projsToInsert.length} projects, ${skillsToInsert.length} skills, ${eduToInsert.length} education, and ${certsToInsert.length} certs!`, 'success');
       loadOverviewMetrics();
       loadSectionData(currentSection);
     }
