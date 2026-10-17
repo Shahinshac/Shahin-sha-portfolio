@@ -1771,9 +1771,14 @@
       }
     };
 
+    // Ensure projectsData is globally accessible for dynamic synchronization
+    window.projectsData = projectsData;
+    window.openProjectModal = openProjectModal;
+    window.closeProjectModal = closeProjectModal;
+
     // Modal Handlers
     function openProjectModal(id) {
-      const data = projectsData[id];
+      const data = (window.projectsData && window.projectsData[id]) || projectsData[id];
       if (!data) return;
 
       document.getElementById('modalNumber').textContent = data.number;
