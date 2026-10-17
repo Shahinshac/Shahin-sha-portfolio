@@ -260,24 +260,40 @@
       const projId = p.id;
       const matched = baselineSpecs[p.title] || {};
 
+      // Parse structured description if stored as JSON
+      let parsed = null;
+      try {
+        if (p.description && p.description.trim().startsWith('{')) {
+          parsed = JSON.parse(p.description);
+        }
+      } catch (e) {}
+
+      const overviewText = (parsed && (parsed.overview || parsed.description)) || p.description || matched.overview || '';
+      const focusText = (parsed && parsed.engineeringFocus) || matched.engineeringFocus || (p.tags && p.tags[0] ? `${p.tags[0]} Architecture` : 'Full-Stack System');
+      const problemText = (parsed && parsed.problem) || matched.problem || overviewText;
+      const solutionText = (parsed && parsed.solution) || matched.solution || 'Engineered with clean architectural separation, relational database modeling, and performant REST APIs.';
+      const challengeText = (parsed && parsed.challenge) || matched.challenge || 'Maintaining high throughput, resilient caching, and strict transactional data consistency.';
+      const impactText = (parsed && parsed.impact) || matched.impact || 'Delivered robust system performance and streamlined workflows for end users.';
+      const architectureText = (parsed && parsed.architecture) || matched.architecture || (p.tags || []).join(' • ');
+      const featuresList = (parsed && Array.isArray(parsed.keyFeatures)) ? parsed.keyFeatures : (matched.keyFeatures || (Array.isArray(p.tags) && p.tags.length > 0 ? p.tags.map(t => `Engineered and integrated ${t}`) : ['Full-stack system integration']));
+
       // Register into window.projectsData for specs modal
       window.projectsData[projId] = {
         number: `PROJECT ${projNum}`,
         title: p.title,
-        engineeringFocus: matched.engineeringFocus || (p.tags && p.tags[0] ? `${p.tags[0]} Architecture` : 'Full-Stack System'),
+        engineeringFocus: focusText,
         authRequired: !!matched.authRequired,
-        overview: p.description || matched.overview || '',
-        problem: matched.problem || p.description,
-        solution: matched.solution || 'Engineered with clean architectural separation, relational database modeling, and performant REST APIs.',
-        challenge: matched.challenge || 'Maintaining high throughput, resilient caching, and strict transactional data consistency.',
-        impact: matched.impact || 'Delivered robust system performance and streamlined workflows for end users.',
-        architecture: matched.architecture || (p.tags || []).join(' • '),
+        overview: overviewText,
+        problem: problemText,
+        solution: solutionText,
+        challenge: challengeText,
+        impact: impactText,
+        architecture: architectureText,
         stack: Array.isArray(p.tags) && p.tags.length > 0 ? p.tags : (matched.stack || []),
-        keyFeatures: matched.keyFeatures || (Array.isArray(p.tags) && p.tags.length > 0
-          ? p.tags.map(t => `Engineered and integrated ${t}`)
-          : ['Full-stack system integration']),
+        keyFeatures: featuresList,
         github: sanitizeUrl(p.github_url),
-        live: sanitizeUrl(p.live_url)
+        live: sanitizeUrl(p.live_url),
+        image: sanitizeUrl(p.image_url)
       };
 
       // Card Element
@@ -324,6 +340,19 @@
       topMeta.appendChild(specsBtn);
       innerDiv.appendChild(topMeta);
 
+      // Optional Project Thumbnail
+      if (p.image_url) {
+        const thumbDiv = document.createElement('div');
+        thumbDiv.className = 'project-card__thumb';
+        const imgEl = document.createElement('img');
+        imgEl.src = sanitizeUrl(p.image_url);
+        imgEl.alt = p.title;
+        imgEl.loading = 'lazy';
+        imgEl.style.cssText = 'width: 100%; height: 160px; object-fit: cover; border-radius: 8px; margin: 8px 0 12px 0; border: 1px solid var(--border);';
+        thumbDiv.appendChild(imgEl);
+        innerDiv.appendChild(thumbDiv);
+      }
+
       // Title
       const h3 = document.createElement('h3');
       h3.textContent = p.title;
@@ -331,7 +360,7 @@
 
       // Description
       const desc = document.createElement('p');
-      desc.textContent = p.description;
+      desc.textContent = overviewText;
       innerDiv.appendChild(desc);
 
       // Tech Stack Badges
@@ -414,6 +443,38 @@
     const roleEl = document.querySelector('.profile-modal-role');
     if (roleEl && profile.headline) {
       roleEl.textContent = profile.headline;
+    }
+    const locEl = document.querySelector('.profile-modal-location');
+    if (locEl && profile.location) {
+      locEl.textContent = profile.location;
+    }
+
+    // Avatar / Photo synchronization
+    if (profile.avatar_url) {
+      const safeAvatar = sanitizeUrl(profile.avatar_url);
+      document.querySelectorAll('.profile-modal-img, .hero__portrait').forEach(img => {
+        img.src = safeAvatar;
+      });
+    }
+
+    // Social Links & Resume Synchronization
+    if (profile.social_links && typeof profile.social_links === 'object') {
+      const sl = profile.social_links;
+      if (sl.github) {
+        document.querySelectorAll('a[href*="github.com/Shahinshac"]').forEach(a => a.href = sanitizeUrl(sl.github));
+      }
+      if (sl.linkedin) {
+        document.querySelectorAll('a[href*="linkedin.com/in"]').forEach(a => a.href = sanitizeUrl(sl.linkedin));
+      }
+      if (sl.twitter) {
+        document.querySelectorAll('a[href*="x.com/"], a[href*="twitter.com/"]').forEach(a => a.href = sanitizeUrl(sl.twitter));
+      }
+      if (sl.instagram) {
+        document.querySelectorAll('a[href*="instagram.com/"]').forEach(a => a.href = sanitizeUrl(sl.instagram));
+      }
+      if (sl.resume) {
+        document.querySelectorAll('a[href*="resume"], a[href*="Resume"]').forEach(a => a.href = sanitizeUrl(sl.resume));
+      }
     }
   }
 

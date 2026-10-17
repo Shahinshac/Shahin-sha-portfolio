@@ -49,7 +49,7 @@
 
   <!-- Generic Edit/Create Modal -->
   <div id="editModal" class="modal-overlay" style="display: none;">
-    <div class="modal-card">
+    <div class="modal-card" id="editModalCard">
       <div class="modal-header">
         <h3 id="editModalTitle">Edit Item</h3>
         <button class="modal-close-btn" onclick="closeEditModal()"><i class="fa-solid fa-xmark"></i></button>
@@ -62,6 +62,39 @@
         <button id="editModalSaveBtn" class="btn btn--primary">
           <i class="fa-solid fa-floppy-disk"></i> Save Changes
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Media Asset Picker Modal -->
+  <div id="mediaPickerModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card modal-card--lg">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-photo-film text-cyan"></i> Select Media Asset</h3>
+        <button class="modal-close-btn" onclick="closeMediaPicker()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap;">
+          <span class="text-sm text-muted">Click any asset in <strong class="mono text-cyan">portfolio-media</strong> to select it:</span>
+          <div>
+            <button class="btn btn--outline btn--sm" onclick="document.getElementById('pickerFileInput').click()">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Upload New Image
+            </button>
+            <input type="file" id="pickerFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handlePickerFileSelect(event)">
+          </div>
+        </div>
+        <div id="mediaPickerProgress" style="display: none; margin-bottom: 12px;">
+          <div class="progress-bar">
+            <div id="mediaPickerProgressBar" class="progress-fill" style="width: 0%;"></div>
+          </div>
+          <span id="mediaPickerStatus" class="mono text-sm text-muted">Uploading...</span>
+        </div>
+        <div id="mediaPickerGrid" class="media-picker-grid">
+          <p class="text-muted text-center py-6" style="grid-column: 1 / -1;"><i class="fa-solid fa-spinner fa-spin"></i> Loading assets...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--ghost" onclick="closeMediaPicker()">Cancel</button>
       </div>
     </div>
   </div>
@@ -268,10 +301,26 @@
              SECTION B: PROJECTS
         -------------------------------------------------------------------- -->
         <section id="sec-projects" class="admin-section" style="display: none;">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap: wrap; gap: 12px;">
             <div class="search-box">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="projectSearchInput" placeholder="Search projects..." oninput="filterProjectTable()">
+              <input type="text" id="projectSearchInput" placeholder="Search projects by title, category, tags..." oninput="filterProjectTable()">
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <select id="projectCategoryFilter" class="filter-select" onchange="filterProjectTable()">
+                <option value="all">All Categories</option>
+                <option value="fullstack">Full-Stack</option>
+                <option value="backend">Backend &amp; APIs</option>
+                <option value="realtime">Real-Time &amp; Cloud</option>
+                <option value="python">Python &amp; ML</option>
+                <option value="erp">ERP &amp; Finance</option>
+              </select>
+              <select id="projectSortFilter" class="filter-select" onchange="filterProjectTable()">
+                <option value="order_asc">Sort: Display Order</option>
+                <option value="order_desc">Sort: Order (Desc)</option>
+                <option value="title_asc">Sort: Title (A-Z)</option>
+                <option value="status_pub">Sort: Published First</option>
+              </select>
             </div>
             <div class="toolbar-actions">
               <button onclick="openCreateProjectModal()" class="btn btn--primary">
@@ -290,7 +339,7 @@
                   <th>Tags</th>
                   <th>Status</th>
                   <th>Order</th>
-                  <th style="width: 150px; text-align: right;">Actions</th>
+                  <th style="width: 160px; text-align: right;">Actions</th>
                 </tr>
               </thead>
               <tbody id="projectsTableBody">
@@ -304,10 +353,20 @@
              SECTION C: SKILLS
         -------------------------------------------------------------------- -->
         <section id="sec-skills" class="admin-section" style="display: none;">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap: wrap; gap: 12px;">
             <div class="search-box">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="skillSearchInput" placeholder="Search skills..." oninput="filterSkillsTable()">
+              <input type="text" id="skillSearchInput" placeholder="Search skills by name..." oninput="filterSkillsTable()">
+            </div>
+            <div>
+              <select id="skillCategoryFilter" class="filter-select" onchange="filterSkillsTable()">
+                <option value="all">All Categories</option>
+                <option value="Languages">Languages</option>
+                <option value="Frontend">Frontend</option>
+                <option value="Backend">Backend</option>
+                <option value="Databases">Databases</option>
+                <option value="Cloud & DevOps">Cloud &amp; DevOps</option>
+              </select>
             </div>
             <div class="toolbar-actions">
               <button onclick="openCreateSkillModal()" class="btn btn--primary">
@@ -340,8 +399,11 @@
              SECTION D: EXPERIENCE
         -------------------------------------------------------------------- -->
         <section id="sec-experience" class="admin-section" style="display: none;">
-          <div class="section-toolbar">
-            <div><h3>Experience &amp; Roles</h3></div>
+          <div class="section-toolbar" style="flex-wrap: wrap; gap: 12px;">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="expSearchInput" placeholder="Search roles, companies, locations..." oninput="filterExperienceTable()">
+            </div>
             <div class="toolbar-actions">
               <button onclick="openCreateExperienceModal()" class="btn btn--primary">
                 <i class="fa-solid fa-plus"></i> Add Experience
@@ -372,8 +434,11 @@
              SECTION E: EDUCATION
         -------------------------------------------------------------------- -->
         <section id="sec-education" class="admin-section" style="display: none;">
-          <div class="section-toolbar">
-            <div><h3>Academic Background</h3></div>
+          <div class="section-toolbar" style="flex-wrap: wrap; gap: 12px;">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="eduSearchInput" placeholder="Search qualifications or institutions..." oninput="filterEducationTable()">
+            </div>
             <div class="toolbar-actions">
               <button onclick="openCreateEducationModal()" class="btn btn--primary">
                 <i class="fa-solid fa-plus"></i> Add Education
@@ -385,7 +450,7 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Degree</th>
+                  <th>Degree / Qualification</th>
                   <th>Institution</th>
                   <th>Period</th>
                   <th>Grade</th>
@@ -405,8 +470,11 @@
              SECTION F: CERTIFICATIONS
         -------------------------------------------------------------------- -->
         <section id="sec-certifications" class="admin-section" style="display: none;">
-          <div class="section-toolbar">
-            <div><h3>Certifications &amp; Credentials</h3></div>
+          <div class="section-toolbar" style="flex-wrap: wrap; gap: 12px;">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="certSearchInput" placeholder="Search certifications or issuers..." oninput="filterCertsTable()">
+            </div>
             <div class="toolbar-actions">
               <button onclick="openCreateCertModal()" class="btn btn--primary">
                 <i class="fa-solid fa-plus"></i> Add Certification
@@ -451,6 +519,45 @@
               </div>
               <div class="card-body">
                 <form id="publicProfileForm" onsubmit="savePublicProfile(event)">
+                  
+                  <!-- Avatar Photo Upload & Preview Widget -->
+                  <div class="form-group">
+                    <label class="form-label mono"><i class="fa-solid fa-user-circle"></i> Profile / Avatar Photo</label>
+                    <div class="image-upload-widget">
+                      <div class="image-preview-row">
+                        <div class="image-preview-box" id="profAvatarBox">
+                          <img id="profAvatarPreview" src="/images/avatar.jpg" alt="Avatar preview" class="image-preview-img" style="display: none;" onerror="this.style.display='none'; document.getElementById('profAvatarPlaceholder').style.display='flex';">
+                          <div id="profAvatarPlaceholder" class="image-preview-placeholder">
+                            <i class="fa-solid fa-user"></i>
+                            <span>No Photo</span>
+                          </div>
+                        </div>
+                        <div class="image-controls-col">
+                          <span class="mono text-sm text-muted">Upload avatar image (JPEG, PNG, WebP &le; 5 MB)</span>
+                          <div class="image-btn-group">
+                            <button type="button" class="btn btn--primary btn--sm" onclick="document.getElementById('profAvatarFileInput').click()">
+                              <i class="fa-solid fa-upload"></i> Upload / Change Photo
+                            </button>
+                            <button type="button" class="btn btn--outline btn--sm" onclick="openMediaPickerForTarget('profAvatarUrl', 'profAvatarPreview', 'profAvatarPlaceholder')">
+                              <i class="fa-solid fa-images"></i> Media Library
+                            </button>
+                            <button type="button" class="btn btn--ghost btn--sm" onclick="resetProfileAvatarToDefault()">
+                              <i class="fa-solid fa-rotate-left"></i> Reset Default
+                            </button>
+                          </div>
+                          <input type="file" id="profAvatarFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleAvatarFileSelect(event)">
+                          <div id="profAvatarProgressWrap" style="display: none;" class="image-upload-progress">
+                            <div class="progress-bar">
+                              <div id="profAvatarProgressBar" class="progress-fill" style="width: 0%;"></div>
+                            </div>
+                            <span id="profAvatarStatus" class="mono text-sm text-muted">Uploading...</span>
+                          </div>
+                          <input type="url" id="profAvatarUrl" class="form-input text-sm mono mt-2" placeholder="Avatar URL (auto-filled on upload or paste)" oninput="updateImageWidgetFromInput('profAvatarUrl', 'profAvatarPreview', 'profAvatarPlaceholder')">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="form-group">
                     <label class="form-label mono">Full Name</label>
                     <input type="text" id="profFullName" class="form-input" required>
@@ -464,22 +571,39 @@
                     <input type="text" id="profLocation" class="form-input" placeholder="Kerala, India">
                   </div>
                   <div class="form-group">
-                    <label class="form-label mono">Avatar Image URL</label>
-                    <div class="input-with-action">
-                      <input type="url" id="profAvatarUrl" class="form-input" placeholder="https://...">
-                      <button type="button" onclick="switchSection('media')" class="btn btn--outline btn--sm">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload
-                      </button>
-                    </div>
-                  </div>
-                  <div class="form-group">
                     <label class="form-label mono">Bio Summary</label>
                     <textarea id="profBio" class="form-input" rows="4"></textarea>
                   </div>
+
+                  <!-- Structured Social & Portfolio Links -->
                   <div class="form-group">
-                    <label class="form-label mono">Social Links (JSON)</label>
-                    <textarea id="profSocialLinks" class="form-input mono text-sm" rows="3" placeholder='{"github":"https://...","linkedin":"https://..."}'></textarea>
+                    <label class="form-label mono"><i class="fa-solid fa-share-nodes"></i> Social &amp; Resume Links</label>
+                    <div class="social-links-grid">
+                      <div>
+                        <label class="text-sm text-muted mono"><i class="fa-brands fa-github"></i> GitHub</label>
+                        <input type="url" id="profLinkGithub" class="form-input text-sm" placeholder="https://github.com/..." oninput="syncSocialLinksFromInputs()">
+                      </div>
+                      <div>
+                        <label class="text-sm text-muted mono"><i class="fa-brands fa-linkedin"></i> LinkedIn</label>
+                        <input type="url" id="profLinkLinkedin" class="form-input text-sm" placeholder="https://linkedin.com/in/..." oninput="syncSocialLinksFromInputs()">
+                      </div>
+                      <div>
+                        <label class="text-sm text-muted mono"><i class="fa-brands fa-x-twitter"></i> Twitter / X</label>
+                        <input type="url" id="profLinkTwitter" class="form-input text-sm" placeholder="https://x.com/..." oninput="syncSocialLinksFromInputs()">
+                      </div>
+                      <div>
+                        <label class="text-sm text-muted mono"><i class="fa-brands fa-instagram"></i> Instagram</label>
+                        <input type="url" id="profLinkInstagram" class="form-input text-sm" placeholder="https://instagram.com/..." oninput="syncSocialLinksFromInputs()">
+                      </div>
+                    </div>
+                    <div class="mt-2">
+                      <label class="text-sm text-muted mono"><i class="fa-solid fa-file-pdf"></i> Resume / CV Link</label>
+                      <input type="text" id="profLinkResume" class="form-input text-sm" placeholder="resume.pdf or URL" oninput="syncSocialLinksFromInputs()">
+                    </div>
+                    <!-- Hidden/Advanced Raw JSON container for bidirectional compatibility -->
+                    <textarea id="profSocialLinks" class="form-input mono text-sm mt-2" rows="2" style="display: none;"></textarea>
                   </div>
+
                   <div class="form-check mt-3">
                     <input type="checkbox" id="profIsPublished" class="form-check-input">
                     <label for="profIsPublished" class="form-check-label">Publish Public Profile to Live Site</label>

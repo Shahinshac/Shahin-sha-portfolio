@@ -330,8 +330,367 @@ async function loadOverviewMetrics() {
 }
 
 /* ==========================================================================
-   4. PROJECTS CRUD
+   3B. UNIVERSAL IMAGE UPLOAD & MEDIA PICKER HELPERS
    ========================================================================== */
+
+let activePickerCallback = null;
+
+async function uploadMediaFile(file, folder = 'uploads') {
+  if (!file) throw new Error('No file selected.');
+
+  const allowedMime = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowedMime.includes(file.type)) {
+    throw new Error('Forbidden file type: Only JPEG, PNG, and WebP images are permitted. SVG rejected.');
+  }
+
+  const maxBytes = 5 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error('File too large: Maximum allowed file size is 5 MB.');
+  }
+
+  const supabase = window.getSupabase();
+  if (!supabase) throw new Error('Supabase client unavailable.');
+
+  const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `${folder}/${Date.now()}_${cleanName}`;
+
+  const { data, error } = await supabase.storage
+    .from('portfolio-media')
+    .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+  if (error) throw error;
+
+  const { data: pubData } = supabase.storage.from('portfolio-media').getPublicUrl(filePath);
+  return {
+    path: filePath,
+    publicUrl: pubData.publicUrl
+  };
+}
+
+function openMediaPicker(onSelect) {
+  activePickerCallback = onSelect;
+  document.getElementById('mediaPickerModal').style.display = 'flex';
+  loadPickerGallery();
+}
+
+function openMediaPickerForTarget(urlInputId, previewImgId, placeholderId) {
+  openMediaPicker((url) => {
+    const input = document.getElementById(urlInputId);
+    if (input) input.value = url;
+    if (previewImgId) {
+      const img = document.getElementById(previewImgId);
+      if (img) {
+        img.src = url;
+        img.style.display = 'block';
+      }
+    }
+    if (placeholderId) {
+      const ph = document.getElementById(placeholderId);
+      if (ph) ph.style.display = 'none';
+    }
+  });
+}
+
+function closeMediaPicker() {
+  document.getElementById('mediaPickerModal').style.display = 'none';
+  activePickerCallback = null;
+}
+
+async function loadPickerGallery() {
+  const grid = document.getElementById('mediaPickerGrid');
+  grid.innerHTML = '<p class="text-muted text-center py-6" style="grid-column: 1 / -1;"><i class="fa-solid fa-spinner fa-spin"></i> Loading assets...</p>';
+
+  const supabase = window.getSupabase();
+  if (!supabase) {
+    grid.innerHTML = '<p class="text-rose text-center py-6" style="grid-column: 1 / -1;">Supabase offline</p>';
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.storage.from('portfolio-media').list('uploads', {
+      limit: 100,
+      sortBy: { column: 'created_at', order: 'desc' }
+    });
+
+    if (error) throw error;
+
+    grid.innerHTML = '';
+    const files = (data || []).filter(item => item.name !== '.emptyFolderPlaceholder');
+    if (!files.length) {
+      grid.innerHTML = '<p class="text-muted text-center py-6" style="grid-column: 1 / -1;">No media files found in bucket. Upload one above!</p>';
+      return;
+    }
+
+    files.forEach(item => {
+      const { data: pubData } = supabase.storage.from('portfolio-media').getPublicUrl(`uploads/${item.name}`);
+      const publicUrl = pubData.publicUrl;
+
+      const card = document.createElement('div');
+      card.className = 'media-picker-item';
+      card.title = `Click to select ${item.name}`;
+      card.innerHTML = `
+        <img src="${publicUrl}" alt="${escapeAttr(item.name)}" class="media-picker-thumb" loading="lazy">
+        <span class="media-picker-name mono">${escapeHTML(item.name)}</span>
+      `;
+      card.onclick = () => {
+        if (activePickerCallback) {
+          activePickerCallback(publicUrl);
+        }
+        closeMediaPicker();
+        showToast('Media asset selected!', 'success');
+      };
+      grid.appendChild(card);
+    });
+  } catch (err) {
+    grid.innerHTML = `<p class="text-rose text-center py-6" style="grid-column: 1 / -1;">Error: ${escapeHTML(err.message)}</p>`;
+  }
+}
+
+async function handlePickerFileSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const pWrap = document.getElementById('mediaPickerProgress');
+  const pBar = document.getElementById('mediaPickerProgressBar');
+  const pStatus = document.getElementById('mediaPickerStatus');
+
+  pWrap.style.display = 'block';
+  pBar.style.width = '30%';
+  pStatus.textContent = `Uploading ${file.name}...`;
+
+  try {
+    const res = await uploadMediaFile(file, 'uploads');
+    pBar.style.width = '100%';
+    pStatus.textContent = 'Uploaded successfully!';
+    showToast('File uploaded to portfolio-media!', 'success');
+    if (activePickerCallback) {
+      activePickerCallback(res.publicUrl);
+      closeMediaPicker();
+    } else {
+      loadPickerGallery();
+    }
+  } catch (err) {
+    showToast('Upload failed: ' + err.message, 'error');
+    pStatus.textContent = 'Upload failed: ' + err.message;
+  } finally {
+    e.target.value = '';
+    setTimeout(() => {
+      pWrap.style.display = 'none';
+      pBar.style.width = '0%';
+    }, 1500);
+  }
+}
+
+async function handleModalImageUpload(e, urlInputId, previewId, placeholderId, progressWrapId, progressBarId, statusId, folder) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const pWrap = document.getElementById(progressWrapId);
+  const pBar = document.getElementById(progressBarId);
+  const pStatus = document.getElementById(statusId);
+
+  if (pWrap) pWrap.style.display = 'block';
+  if (pBar) pBar.style.width = '35%';
+  if (pStatus) pStatus.textContent = `Uploading ${file.name}...`;
+
+  try {
+    const res = await uploadMediaFile(file, folder || 'uploads');
+    if (pBar) pBar.style.width = '100%';
+    if (pStatus) pStatus.textContent = 'Upload complete!';
+
+    const urlInput = document.getElementById(urlInputId);
+    if (urlInput) urlInput.value = res.publicUrl;
+
+    const img = document.getElementById(previewId);
+    const ph = document.getElementById(placeholderId);
+    if (img) {
+      img.src = res.publicUrl;
+      img.style.display = 'block';
+    }
+    if (ph) ph.style.display = 'none';
+
+    showToast('Photo uploaded successfully! Save changes to record.', 'success');
+  } catch (err) {
+    showToast('Image upload failed: ' + err.message, 'error');
+    if (pStatus) pStatus.textContent = 'Upload failed: ' + err.message;
+  } finally {
+    e.target.value = '';
+    setTimeout(() => {
+      if (pWrap) pWrap.style.display = 'none';
+      if (pBar) pBar.style.width = '0%';
+    }, 2000);
+  }
+}
+
+function clearModalImageWidget(urlInputId, previewId, placeholderId) {
+  const urlInput = document.getElementById(urlInputId);
+  if (urlInput) urlInput.value = '';
+
+  const img = document.getElementById(previewId);
+  const ph = document.getElementById(placeholderId);
+  if (img) {
+    img.src = '';
+    img.style.display = 'none';
+  }
+  if (ph) ph.style.display = 'flex';
+  showToast('Image removed. Click Save to apply.', 'info');
+}
+
+function updateImageWidgetFromInput(urlInputId, previewId, placeholderId) {
+  const urlInput = document.getElementById(urlInputId);
+  const img = document.getElementById(previewId);
+  const ph = document.getElementById(placeholderId);
+  const val = urlInput ? urlInput.value.trim() : '';
+
+  if (val) {
+    if (img) {
+      img.src = val;
+      img.style.display = 'block';
+    }
+    if (ph) ph.style.display = 'none';
+  } else {
+    if (img) {
+      img.src = '';
+      img.style.display = 'none';
+    }
+    if (ph) ph.style.display = 'flex';
+  }
+}
+
+/* ==========================================================================
+   4. PROJECTS CRUD WITH RICH SPECS & PHOTO EDITING
+   ========================================================================== */
+
+const baselineSpecs = {
+  'HospitalOS + PharmacyERP': {
+    engineeringFocus: 'Healthcare workflow + inventory integration',
+    authRequired: false,
+    overview: 'HospitalOS + PharmacyERP unifies clinical records management with pharmacy inventory control to eliminate medication expiration waste and streamline hospital administrative coordination.',
+    problem: 'Traditional clinic systems struggle with disconnected pharmacy inventory, leading to expired medication dispensation, stockouts, and disorganized medical record sharing between physicians and dispensaries.',
+    solution: 'Engineered a centralized PostgreSQL relational database accessed through NestJS REST APIs with Prisma ORM. Paired with a responsive React doctor console and a native C# client for rapid pharmacy dispensing with FEFO stock rotation.',
+    challenge: 'Synchronizing dual web and C# desktop client requests with atomic transactional locks to prevent duplicate stock dispenses during peak patient hours.',
+    impact: 'Eliminated expired stock dispensing risk, reduced prescription fulfillment time by 45%, and unified records for multi-department clinics.',
+    architecture: 'NestJS backend services containerized with Docker, PostgreSQL relational schema, React web interface, and native C# client communicating over secured REST endpoints.',
+    keyFeatures: [
+      'Clinical patient records management & outpatient appointment scheduling',
+      'Pharmacy dispensing with automated First-Expired-First-Out (FEFO) stock rotation',
+      'Role-based access control (RBAC) separating doctors, nurses, and pharmacists',
+      'Relational data modeling with PostgreSQL and type-safe Prisma ORM',
+      'C# Windows desktop module communicating via secured REST endpoints'
+    ]
+  },
+  'Restaurant Billing & Real-Time POS': {
+    engineeringFocus: 'Real-time order synchronization',
+    authRequired: true,
+    overview: 'A food-service management system designed to accelerate table turnover, push waitstaff orders instantly to kitchen display stations, and streamline customer bill settlement with integrated digital payments.',
+    problem: 'Order discrepancies and delays happen frequently when waitstaff paper slips fail to sync immediately with kitchen prep stations or during peak checkout rush.',
+    solution: 'Constructed an event-driven synchronization layer using Node.js and Socket.io to push table tickets immediately to the Kitchen Display System (KDS), backed by Next.js and secure Razorpay payment flow.',
+    challenge: 'Handling real-time WebSocket state reconnection without losing pending ticket items or producing duplicate kitchen order prints during network drops.',
+    impact: 'Reduced table turnover time by 30% and achieved instant kitchen ticket dispatch with zero lost orders.',
+    architecture: 'Next.js frontend deployed on Vercel, Node.js/Express backend server, Socket.io bi-directional WebSocket channels, and PostgreSQL via Prisma.',
+    keyFeatures: [
+      'Dynamic visual table management & instant bill calculation',
+      'Real-time kitchen order dispatch via Socket.io WebSocket channels',
+      'Bi-directional live order state updates across server and KDS stations',
+      'Secure Razorpay payment gateway checkout and webhook verification',
+      'PostgreSQL relational schema migrations with Prisma ORM'
+    ]
+  },
+  'Core Banking System (CBS)': {
+    engineeringFocus: 'Role-based banking workflows',
+    authRequired: false,
+    overview: 'A core financial management engine simulating retail banking workflows, credit assessment schedules, and transactional ledger accounting with strict audit logging.',
+    problem: 'Financial operations require strict data consistency, role separation, and error-safe balance updates to prevent balance calculation bugs or unauthorized transactional actions.',
+    solution: 'Developed Python Flask REST endpoints with Flask-SQLAlchemy and PostgreSQL, enforcing signed JWT authentication and role-based permissions separating customer accounts from teller operations.',
+    challenge: 'Structuring strict isolation levels on relational database transactions to eliminate race conditions during simultaneous fund transfers.',
+    impact: '100% mathematical precision across multi-ledger transactions and automated loan EMI schedule amortization.',
+    architecture: 'React + TypeScript frontend dashboard interacting with a Python Flask service backed by PostgreSQL relational tables.',
+    keyFeatures: [
+      'Customer account creation & multi-account ledger management',
+      'Atomic deposits, withdrawals & ledger fund transfers with audit logging',
+      'Loan application processing & automated EMI schedule calculations',
+      'Role-based authorization for tellers, managers, and account holders',
+      'Relational integrity and audit-ready transaction history'
+    ]
+  },
+  'CoreERP Enterprise Suite': {
+    engineeringFocus: 'Enterprise Resource Planning & Operations',
+    authRequired: false,
+    overview: 'CoreERP is a full-featured enterprise management platform built to centralize inventory movement, employee directories, and financial audit trails into a single coordinated system.',
+    problem: 'Growing businesses encounter operational friction when departments use fragmented tools for stock control, personnel management, and billing records.',
+    solution: 'Built a unified architecture with React, Node.js, and PostgreSQL to provide role-based dashboard views and automated transaction workflows across company departments.',
+    challenge: 'Designing a highly normalized relational database schema that supports scalable multi-department querying without slow join bottlenecks.',
+    impact: 'Centralized operational reporting across 3 major business verticals into a unified real-time dashboard.',
+    architecture: 'React + TypeScript frontend interacting with an Express REST API backend and PostgreSQL database managed with Prisma ORM.',
+    keyFeatures: [
+      'Multi-department employee directory & role assignment',
+      'Warehouse inventory dispatching & stock balance auditing',
+      'Automated financial ledger logs and billing reports',
+      'Type-safe schema validation with Prisma ORM'
+    ]
+  },
+  'Expense Tracker & Financial Analytics': {
+    engineeringFocus: 'Financial analytics & budgets',
+    authRequired: false,
+    overview: 'An interactive personal finance application that helps users monitor expenditures, set category budgets, and analyze spending patterns with real-time Chart.js visual graphs.',
+    problem: 'Managing personal expenses across multiple categories often lacks visual insights and fast transaction categorization.',
+    solution: 'Engineered a responsive React + TypeScript dashboard with Chart.js visualization, Node.js backend, and PostgreSQL for relational budget storage.',
+    challenge: 'Dynamically computing real-time aggregations across custom date ranges without degrading client UI frame rates.',
+    impact: 'Instant visual category breakdowns and threshold notifications with zero client-side lag.',
+    architecture: 'React Vite client with Chart.js, Express REST API, and PostgreSQL relational database.',
+    keyFeatures: [
+      'Interactive category spending breakdown charts',
+      'Custom budget limit thresholds with alert flags',
+      'Quick transaction filtering and CSV export',
+      'Optimized client-side rendering with Vite'
+    ]
+  },
+  'Yumm (Nex-Food) Ordering Platform': {
+    engineeringFocus: 'On-demand food ordering & delivery',
+    authRequired: false,
+    overview: 'A modern food ordering platform featuring restaurant menus, dynamic cart calculations, real-time checkout flows, and responsive UI designed for mobile and desktop.',
+    problem: 'Food ordering platforms require responsive cart synchronization, fast menu filtering, and smooth navigation under high concurrency.',
+    solution: 'Constructed with Next.js and TypeScript, utilizing server-side rendering for restaurant listings and optimized state management for the order checkout pipeline.',
+    challenge: 'Synchronizing nested item customizer options and dynamic tax calculations smoothly across local storage and server session.',
+    impact: 'Sub-second page navigations and a seamless multi-item order placement pipeline.',
+    architecture: 'Next.js application deployed on Vercel with TailwindCSS and PostgreSQL backend.',
+    keyFeatures: [
+      'Dynamic multi-item cart with persistent local storage',
+      'Fast restaurant menu search and dietary category filtering',
+      'Mobile-first responsive interface with fluid transitions'
+    ]
+  },
+  'AI Resume Screening & Ranking': {
+    engineeringFocus: 'Natural language parsing + ranking',
+    authRequired: false,
+    overview: 'An AI-powered recruitment tool that parses candidate resumes from PDFs, tokenizes technical skills, and ranks candidates against job descriptions using NLP.',
+    problem: 'HR teams spend excessive manual hours reviewing hundreds of resumes for technical roles without objective match metrics.',
+    solution: 'Built a Python Flask service using TF-IDF vectorization and Cosine Similarity to compute quantified relevancy scores for candidate resumes.',
+    challenge: 'Normalizing heterogeneous resume formatting, non-standard headings, and multi-column PDF layouts for accurate token extraction.',
+    impact: 'Reduces recruiter candidate screening cycles by 75% with transparent similarity metrics.',
+    architecture: 'Python Flask processing backend, PyPDF2 text extraction, scikit-learn NLP models, and Pandas analytics.',
+    keyFeatures: [
+      'TF-IDF text vectorization and cosine similarity scoring',
+      'Automated PDF resume parsing and skill keyword extraction',
+      'Ranked candidate leaderboard generation for hiring managers'
+    ]
+  },
+  'Company Management System': {
+    engineeringFocus: 'Corporate hierarchy & operations',
+    authRequired: false,
+    overview: 'A comprehensive corporate portal for employee records, organizational tree navigation, leave requests, and department budgeting.',
+    problem: 'Internal corporate processes become disorganized without a centralized system for staff directories and administrative approvals.',
+    solution: 'Built a React and Express platform supporting role-based access control for employees, department managers, and system administrators.',
+    challenge: 'Constructing recursive organizational chart queries without recursive database performance penalties.',
+    impact: 'Eliminated manual email leave approval trails and established clear organizational hierarchy views.',
+    architecture: 'React frontend connected to an Express REST API backend and MongoDB document database.',
+    keyFeatures: [
+      'Interactive organizational department hierarchy view',
+      'Leave management and attendance tracking workflows',
+      'Administrative role-based permissions and access audits'
+    ]
+  }
+};
 
 let cachedProjects = [];
 
@@ -352,7 +711,7 @@ async function loadProjects() {
   }
 
   cachedProjects = data || [];
-  renderProjectsTable(cachedProjects);
+  filterProjectTable();
 }
 
 function renderProjectsTable(projects) {
@@ -360,7 +719,7 @@ function renderProjectsTable(projects) {
   tbody.innerHTML = '';
 
   if (!projects.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-6">No projects found. Click "Add Project" or use the Initial Content Seed.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-6">No matching projects found.</td></tr>';
     return;
   }
 
@@ -373,11 +732,28 @@ function renderProjectsTable(projects) {
 
     const tagsHtml = (p.tags || []).slice(0, 3).map(t => `<span class="badge badge-cyan mono">${escapeHTML(t)}</span>`).join(' ');
 
+    let cleanDesc = p.description || '';
+    if (cleanDesc.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(cleanDesc);
+        cleanDesc = parsed.overview || parsed.description || cleanDesc;
+      } catch (e) {}
+    }
+
+    const thumbHtml = p.image_url 
+      ? `<img src="${escapeAttr(p.image_url)}" alt="thumb" style="width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); vertical-align: middle; margin-right: 8px;">`
+      : `<span style="display: inline-flex; width: 32px; height: 32px; border-radius: 4px; background: rgba(255,255,255,0.05); align-items: center; justify-content: center; margin-right: 8px; color: var(--text-subtle);"><i class="fa-solid fa-image"></i></span>`;
+
     tr.innerHTML = `
       <td class="mono text-muted text-sm">${String(idx + 1).padStart(2, '0')}</td>
       <td>
-        <strong style="color: var(--text-main);">${escapeHTML(p.title)}</strong>
-        <p class="text-muted text-sm" style="max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(p.description)}</p>
+        <div style="display: flex; align-items: center;">
+          ${thumbHtml}
+          <div>
+            <strong style="color: var(--text-main); cursor: pointer;" onclick="viewProjectDetails('${p.id}')">${escapeHTML(p.title)}</strong>
+            <p class="text-muted text-sm" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(cleanDesc)}</p>
+          </div>
+        </div>
       </td>
       <td><span class="badge badge-indigo mono">${escapeHTML(p.category)}</span></td>
       <td>${tagsHtml}</td>
@@ -385,10 +761,13 @@ function renderProjectsTable(projects) {
       <td class="mono">${p.display_order}</td>
       <td>
         <div class="table-actions">
+          <button class="action-btn" title="View Full Specifications" onclick="viewProjectDetails('${p.id}')">
+            <i class="fa-solid fa-eye"></i>
+          </button>
           <button class="action-btn action-btn--publish" title="${p.is_published ? 'Unpublish (Make Draft)' : 'Publish to Live Site'}" onclick="toggleProjectPublish('${p.id}', ${p.is_published})">
             <i class="fa-solid ${p.is_published ? 'fa-eye-slash' : 'fa-eye'}"></i>
           </button>
-          <button class="action-btn" title="Edit Project" onclick="openEditProjectModal('${p.id}')">
+          <button class="action-btn" title="Edit Project &amp; Photos" onclick="openEditProjectModal('${p.id}')">
             <i class="fa-solid fa-pen-to-square"></i>
           </button>
           <button class="action-btn action-btn--delete" title="Delete Project" onclick="confirmDeleteProject('${p.id}', '${escapeAttr(p.title)}')">
@@ -402,22 +781,141 @@ function renderProjectsTable(projects) {
 }
 
 function filterProjectTable() {
-  const query = document.getElementById('projectSearchInput').value.toLowerCase();
-  const filtered = cachedProjects.filter(p => 
-    p.title.toLowerCase().includes(query) || 
-    p.category.toLowerCase().includes(query) ||
-    (p.tags || []).some(t => t.toLowerCase().includes(query))
-  );
-  renderProjectsTable(filtered);
+  const query = (document.getElementById('projectSearchInput')?.value || '').toLowerCase().trim();
+  const catFilter = document.getElementById('projectCategoryFilter')?.value || 'all';
+  const sortFilter = document.getElementById('projectSortFilter')?.value || 'order_asc';
+
+  let list = [...cachedProjects];
+
+  if (catFilter !== 'all') {
+    list = list.filter(p => (p.category || '').toLowerCase() === catFilter.toLowerCase());
+  }
+
+  if (query) {
+    list = list.filter(p => 
+      (p.title || '').toLowerCase().includes(query) || 
+      (p.category || '').toLowerCase().includes(query) ||
+      (p.description || '').toLowerCase().includes(query) ||
+      (p.tags || []).some(t => t.toLowerCase().includes(query))
+    );
+  }
+
+  if (sortFilter === 'order_asc') {
+    list.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+  } else if (sortFilter === 'order_desc') {
+    list.sort((a, b) => (b.display_order || 0) - (a.display_order || 0));
+  } else if (sortFilter === 'title_asc') {
+    list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  } else if (sortFilter === 'status_pub') {
+    list.sort((a, b) => (b.is_published ? 1 : 0) - (a.is_published ? 1 : 0));
+  }
+
+  renderProjectsTable(list);
+}
+
+function viewProjectDetails(id) {
+  const p = cachedProjects.find(item => item.id === id);
+  if (!p) return;
+
+  let parsed = null;
+  try {
+    if (p.description && p.description.trim().startsWith('{')) {
+      parsed = JSON.parse(p.description);
+    }
+  } catch (e) {}
+
+  const matched = baselineSpecs[p.title] || {};
+  const overview = (parsed && (parsed.overview || parsed.description)) || p.description || matched.overview || 'No overview provided.';
+  const problem = (parsed && parsed.problem) || matched.problem || 'N/A';
+  const solution = (parsed && parsed.solution) || matched.solution || 'N/A';
+  const challenge = (parsed && parsed.challenge) || matched.challenge || 'N/A';
+  const impact = (parsed && parsed.impact) || matched.impact || 'N/A';
+  const architecture = (parsed && parsed.architecture) || matched.architecture || (p.tags || []).join(' • ');
+  const focus = (parsed && parsed.engineeringFocus) || matched.engineeringFocus || (p.tags && p.tags[0] ? `${p.tags[0]} Architecture` : 'Full-Stack');
+  const features = (parsed && Array.isArray(parsed.keyFeatures)) ? parsed.keyFeatures : (matched.keyFeatures || []);
+
+  const tagsHtml = (p.tags || []).map(t => `<span class="badge badge-cyan mono">${escapeHTML(t)}</span>`).join(' ');
+
+  const html = `
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      ${p.image_url ? `
+        <div style="width: 100%; height: 200px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
+          <img src="${escapeAttr(p.image_url)}" alt="${escapeAttr(p.title)}" style="width: 100%; height: 100%; object-fit: cover;">
+        </div>
+      ` : ''}
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <span class="badge badge-indigo mono">${escapeHTML(p.category)}</span>
+        <span class="badge mono ${p.is_published ? 'badge-emerald' : 'badge-amber'}">${p.is_published ? 'Published' : 'Draft'}</span>
+        <span class="badge mono">Order: ${p.display_order}</span>
+        <span class="mono text-muted text-sm">${escapeHTML(focus)}</span>
+      </div>
+      <div>
+        <h4 class="mono text-cyan" style="margin-bottom: 4px;">OVERVIEW</h4>
+        <p style="color: var(--text-main); font-size: 0.95rem;">${escapeHTML(overview)}</p>
+      </div>
+      <div class="grid grid--2col">
+        <div style="background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 8px; padding: 12px;">
+          <h4 class="mono text-rose" style="font-size: 0.85rem; margin-bottom: 4px;"><i class="fa-solid fa-circle-exclamation"></i> THE PROBLEM</h4>
+          <p class="text-sm" style="color: var(--text-muted);">${escapeHTML(problem)}</p>
+        </div>
+        <div style="background: rgba(45, 212, 191, 0.05); border: 1px solid rgba(45, 212, 191, 0.2); border-radius: 8px; padding: 12px;">
+          <h4 class="mono text-cyan" style="font-size: 0.85rem; margin-bottom: 4px;"><i class="fa-solid fa-circle-check"></i> THE SOLUTION</h4>
+          <p class="text-sm" style="color: var(--text-muted);">${escapeHTML(solution)}</p>
+        </div>
+      </div>
+      <div class="grid grid--2col">
+        <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 12px;">
+          <h4 class="mono text-amber" style="font-size: 0.85rem; margin-bottom: 4px;"><i class="fa-solid fa-mountain"></i> CHALLENGES OVERCOME</h4>
+          <p class="text-sm" style="color: var(--text-muted);">${escapeHTML(challenge)}</p>
+        </div>
+        <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 12px;">
+          <h4 class="mono text-emerald" style="font-size: 0.85rem; margin-bottom: 4px;"><i class="fa-solid fa-bullseye"></i> MEASURABLE IMPACT</h4>
+          <p class="text-sm" style="color: var(--text-muted);">${escapeHTML(impact)}</p>
+        </div>
+      </div>
+      <div>
+        <h4 class="mono text-muted text-sm" style="margin-bottom: 6px;">ARCHITECTURE</h4>
+        <p class="text-sm text-muted">${escapeHTML(architecture)}</p>
+      </div>
+      <div>
+        <h4 class="mono text-muted text-sm" style="margin-bottom: 6px;">TECH STACK</h4>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">${tagsHtml}</div>
+      </div>
+      ${features.length ? `
+        <div>
+          <h4 class="mono text-muted text-sm" style="margin-bottom: 6px;">KEY HIGHLIGHTS</h4>
+          <ul style="padding-left: 18px; color: var(--text-muted); font-size: 0.85rem;">
+            ${features.map(f => `<li>${escapeHTML(f)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+      <div style="display: flex; gap: 12px; margin-top: 8px;">
+        ${p.github_url ? `<a href="${escapeAttr(p.github_url)}" target="_blank" class="btn btn--outline btn--sm"><i class="fa-brands fa-github"></i> GitHub</a>` : ''}
+        ${p.live_url ? `<a href="${escapeAttr(p.live_url)}" target="_blank" class="btn btn--primary btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Live Demo</a>` : ''}
+        <button type="button" class="btn btn--ghost btn--sm" onclick="closeEditModal(); openEditProjectModal('${p.id}');"><i class="fa-solid fa-pen-to-square"></i> Edit Project</button>
+      </div>
+    </div>
+  `;
+
+  openEditModal(`Project Specs: ${p.title}`, html, async () => { return true; }, true);
+  const saveBtn = document.getElementById('editModalSaveBtn');
+  if (saveBtn) saveBtn.style.display = 'none';
 }
 
 function openCreateProjectModal() {
   const html = `
     <form id="projectForm">
-      <div class="form-group">
-        <label class="form-label mono">Project Title *</label>
-        <input type="text" id="mProjTitle" class="form-input" placeholder="e.g. HospitalOS + PharmacyERP" required>
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono">Project Title *</label>
+          <input type="text" id="mProjTitle" class="form-input" placeholder="e.g. HospitalOS + PharmacyERP" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono">Engineering Focus / Subtitle</label>
+          <input type="text" id="mProjFocus" class="form-input" placeholder="e.g. Real-Time Order Dispatch">
+        </div>
       </div>
+
       <div class="grid grid--2col">
         <div class="form-group">
           <label class="form-label mono">Category *</label>
@@ -434,18 +932,87 @@ function openCreateProjectModal() {
           <input type="number" id="mProjOrder" class="form-input" value="1">
         </div>
       </div>
+
+      <!-- Project Photo Upload & Preview Widget -->
       <div class="form-group">
-        <label class="form-label mono">Description *</label>
-        <textarea id="mProjDesc" class="form-input" rows="3" placeholder="Overview of system architecture and features..." required></textarea>
+        <label class="form-label mono"><i class="fa-solid fa-image"></i> Project Thumbnail / Cover Photo</label>
+        <div class="image-upload-widget">
+          <div class="image-preview-row">
+            <div class="image-preview-box image-preview-box--wide" id="mProjImageBox">
+              <img id="mProjImagePreview" src="" alt="Thumbnail preview" class="image-preview-img" style="display: none;" onerror="this.style.display='none'; document.getElementById('mProjImagePlaceholder').style.display='flex';">
+              <div id="mProjImagePlaceholder" class="image-preview-placeholder">
+                <i class="fa-solid fa-image"></i>
+                <span>No thumbnail selected</span>
+              </div>
+            </div>
+            <div class="image-controls-col">
+              <span class="mono text-sm text-muted">Upload cover image (JPEG, PNG, WebP &le; 5 MB)</span>
+              <div class="image-btn-group">
+                <button type="button" class="btn btn--primary btn--sm" onclick="document.getElementById('mProjFileInput').click()">
+                  <i class="fa-solid fa-upload"></i> Upload Photo
+                </button>
+                <button type="button" class="btn btn--outline btn--sm" onclick="openMediaPickerForTarget('mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder')">
+                  <i class="fa-solid fa-images"></i> Media Library
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" onclick="clearModalImageWidget('mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder')">
+                  <i class="fa-solid fa-trash-can"></i> Remove
+                </button>
+              </div>
+              <input type="file" id="mProjFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleModalImageUpload(event, 'mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder', 'mProjProgressWrap', 'mProjProgressBar', 'mProjStatus', 'uploads')">
+              <div id="mProjProgressWrap" style="display: none;" class="image-upload-progress">
+                <div class="progress-bar">
+                  <div id="mProjProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+                <span id="mProjStatus" class="mono text-sm text-muted">Uploading...</span>
+              </div>
+              <input type="url" id="mProjImage" class="form-input text-sm mono mt-2" placeholder="Image URL (auto-filled on upload or paste)" oninput="updateImageWidgetFromInput('mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder')">
+            </div>
+          </div>
+        </div>
       </div>
+
       <div class="form-group">
-        <label class="form-label mono">Tags (Comma-separated)</label>
+        <label class="form-label mono">Overview &amp; Summary *</label>
+        <textarea id="mProjDesc" class="form-input" rows="3" placeholder="Primary overview of the application and its purpose..." required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label mono">Tags &amp; Technologies (Comma-separated)</label>
         <input type="text" id="mProjTags" class="form-input" placeholder="NestJS, React, PostgreSQL, Docker">
       </div>
-      <div class="form-group">
-        <label class="form-label mono">Image URL (Optional)</label>
-        <input type="url" id="mProjImage" class="form-input" placeholder="https://... or select from Media Storage">
+
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-circle-exclamation text-rose"></i> Problem Statement</label>
+          <textarea id="mProjProblem" class="form-input text-sm" rows="3" placeholder="What core problem or inefficiency does this solve?"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-circle-check text-cyan"></i> Engineered Solution</label>
+          <textarea id="mProjSolution" class="form-input text-sm" rows="3" placeholder="How does the system technically address the problem?"></textarea>
+        </div>
       </div>
+
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-mountain text-amber"></i> Challenges Overcome</label>
+          <textarea id="mProjChallenge" class="form-input text-sm" rows="2" placeholder="Technical hurdles, concurrency or data consistency challenges..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-bullseye text-emerald"></i> Measurable Impact</label>
+          <textarea id="mProjImpact" class="form-input text-sm" rows="2" placeholder="Quantified results, turnover speed, error reduction..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label mono">Architecture &amp; System Design</label>
+        <textarea id="mProjArch" class="form-input text-sm" rows="2" placeholder="Microservices, Docker containerization, REST API, WebSocket layer..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label mono">Key Technical Features (One feature per line)</label>
+        <textarea id="mProjFeatures" class="form-input text-sm" rows="3" placeholder="Dynamic table reservation &amp; instant bill settlement&#10;Real-time order dispatch via WebSockets&#10;Razorpay webhook verification"></textarea>
+      </div>
+
       <div class="grid grid--2col">
         <div class="form-group">
           <label class="form-label mono">GitHub URL</label>
@@ -456,8 +1023,9 @@ function openCreateProjectModal() {
           <input type="url" id="mProjLive" class="form-input" placeholder="https://...">
         </div>
       </div>
+
       <div class="form-check mt-3">
-        <input type="checkbox" id="mProjPublish" class="form-check-input">
+        <input type="checkbox" id="mProjPublish" class="form-check-input" checked>
         <label for="mProjPublish" class="form-check-label">Publish this project immediately (Visible on live site)</label>
       </div>
     </form>
@@ -465,7 +1033,7 @@ function openCreateProjectModal() {
 
   openEditModal('Create New Project', html, async () => {
     const title = document.getElementById('mProjTitle').value.trim();
-    const desc = document.getElementById('mProjDesc').value.trim();
+    const overview = document.getElementById('mProjDesc').value.trim();
     const category = document.getElementById('mProjCategory').value;
     const order = parseInt(document.getElementById('mProjOrder').value) || 0;
     const tagsStr = document.getElementById('mProjTags').value;
@@ -475,15 +1043,35 @@ function openCreateProjectModal() {
     const liveUrl = document.getElementById('mProjLive').value.trim() || null;
     const isPublished = document.getElementById('mProjPublish').checked;
 
-    if (!title || !desc) {
-      showToast('Title and Description are required.', 'error');
+    const focus = document.getElementById('mProjFocus').value.trim();
+    const problem = document.getElementById('mProjProblem').value.trim();
+    const solution = document.getElementById('mProjSolution').value.trim();
+    const challenge = document.getElementById('mProjChallenge').value.trim();
+    const impact = document.getElementById('mProjImpact').value.trim();
+    const architecture = document.getElementById('mProjArch').value.trim();
+    const keyFeatures = document.getElementById('mProjFeatures').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+    if (!title || !overview) {
+      showToast('Project Title and Overview are required.', 'error');
       return false;
     }
+
+    const descObj = {
+      overview,
+      engineeringFocus: focus,
+      problem,
+      solution,
+      challenge,
+      impact,
+      architecture,
+      keyFeatures
+    };
+    const descPayload = JSON.stringify(descObj);
 
     const supabase = window.getSupabase();
     const { error } = await supabase.from('projects').insert([{
       title,
-      description: desc,
+      description: descPayload,
       category,
       display_order: order,
       tags,
@@ -498,23 +1086,47 @@ function openCreateProjectModal() {
       return false;
     }
 
-    showToast('Project created successfully!', 'success');
+    showToast('Project created successfully with full specifications!', 'success');
     loadProjects();
     loadOverviewMetrics();
     return true;
-  });
+  }, true);
 }
 
 function openEditProjectModal(id) {
   const p = cachedProjects.find(item => item.id === id);
   if (!p) return;
 
+  let parsed = null;
+  try {
+    if (p.description && p.description.trim().startsWith('{')) {
+      parsed = JSON.parse(p.description);
+    }
+  } catch (e) {}
+
+  const matched = baselineSpecs[p.title] || {};
+  const overview = (parsed && (parsed.overview || parsed.description)) || p.description || matched.overview || '';
+  const focus = (parsed && parsed.engineeringFocus) || matched.engineeringFocus || '';
+  const problem = (parsed && parsed.problem) || matched.problem || '';
+  const solution = (parsed && parsed.solution) || matched.solution || '';
+  const challenge = (parsed && parsed.challenge) || matched.challenge || '';
+  const impact = (parsed && parsed.impact) || matched.impact || '';
+  const architecture = (parsed && parsed.architecture) || matched.architecture || (p.tags || []).join(' • ');
+  const keyFeaturesList = (parsed && Array.isArray(parsed.keyFeatures)) ? parsed.keyFeatures : (matched.keyFeatures || []);
+
   const html = `
     <form id="projectForm">
-      <div class="form-group">
-        <label class="form-label mono">Project Title *</label>
-        <input type="text" id="mProjTitle" class="form-input" value="${escapeAttr(p.title)}" required>
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono">Project Title *</label>
+          <input type="text" id="mProjTitle" class="form-input" value="${escapeAttr(p.title)}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono">Engineering Focus / Subtitle</label>
+          <input type="text" id="mProjFocus" class="form-input" value="${escapeAttr(focus)}" placeholder="e.g. Healthcare workflow + inventory">
+        </div>
       </div>
+
       <div class="grid grid--2col">
         <div class="form-group">
           <label class="form-label mono">Category *</label>
@@ -531,18 +1143,87 @@ function openEditProjectModal(id) {
           <input type="number" id="mProjOrder" class="form-input" value="${p.display_order}">
         </div>
       </div>
+
+      <!-- Project Photo Upload & Preview Widget -->
       <div class="form-group">
-        <label class="form-label mono">Description *</label>
-        <textarea id="mProjDesc" class="form-input" rows="3" required>${escapeHTML(p.description)}</textarea>
+        <label class="form-label mono"><i class="fa-solid fa-image"></i> Project Thumbnail / Cover Photo</label>
+        <div class="image-upload-widget">
+          <div class="image-preview-row">
+            <div class="image-preview-box image-preview-box--wide" id="mProjImageBox">
+              <img id="mProjImagePreview" src="${escapeAttr(p.image_url || '')}" alt="Thumbnail preview" class="image-preview-img" style="${p.image_url ? '' : 'display: none;'}" onerror="this.style.display='none'; document.getElementById('mProjImagePlaceholder').style.display='flex';">
+              <div id="mProjImagePlaceholder" class="image-preview-placeholder" style="${p.image_url ? 'display: none;' : ''}">
+                <i class="fa-solid fa-image"></i>
+                <span>No thumbnail uploaded</span>
+              </div>
+            </div>
+            <div class="image-controls-col">
+              <span class="mono text-sm text-muted">Upload cover image (JPEG, PNG, WebP &le; 5 MB)</span>
+              <div class="image-btn-group">
+                <button type="button" class="btn btn--primary btn--sm" onclick="document.getElementById('mProjFileInput').click()">
+                  <i class="fa-solid fa-upload"></i> Upload / Change Photo
+                </button>
+                <button type="button" class="btn btn--outline btn--sm" onclick="openMediaPickerForTarget('mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder')">
+                  <i class="fa-solid fa-images"></i> Media Library
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" onclick="clearModalImageWidget('mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder')">
+                  <i class="fa-solid fa-trash-can"></i> Remove
+                </button>
+              </div>
+              <input type="file" id="mProjFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleModalImageUpload(event, 'mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder', 'mProjProgressWrap', 'mProjProgressBar', 'mProjStatus', 'uploads')">
+              <div id="mProjProgressWrap" style="display: none;" class="image-upload-progress">
+                <div class="progress-bar">
+                  <div id="mProjProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+                <span id="mProjStatus" class="mono text-sm text-muted">Uploading...</span>
+              </div>
+              <input type="url" id="mProjImage" class="form-input text-sm mono mt-2" placeholder="Image URL (auto-filled on upload or paste)" value="${escapeAttr(p.image_url || '')}" oninput="updateImageWidgetFromInput('mProjImage', 'mProjImagePreview', 'mProjImagePlaceholder')">
+            </div>
+          </div>
+        </div>
       </div>
+
       <div class="form-group">
-        <label class="form-label mono">Tags (Comma-separated)</label>
+        <label class="form-label mono">Overview &amp; Summary *</label>
+        <textarea id="mProjDesc" class="form-input" rows="3" required>${escapeHTML(overview)}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label mono">Tags &amp; Technologies (Comma-separated)</label>
         <input type="text" id="mProjTags" class="form-input" value="${escapeAttr((p.tags || []).join(', '))}">
       </div>
-      <div class="form-group">
-        <label class="form-label mono">Image URL (Optional)</label>
-        <input type="url" id="mProjImage" class="form-input" value="${escapeAttr(p.image_url || '')}">
+
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-circle-exclamation text-rose"></i> Problem Statement</label>
+          <textarea id="mProjProblem" class="form-input text-sm" rows="3">${escapeHTML(problem)}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-circle-check text-cyan"></i> Engineered Solution</label>
+          <textarea id="mProjSolution" class="form-input text-sm" rows="3">${escapeHTML(solution)}</textarea>
+        </div>
       </div>
+
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-mountain text-amber"></i> Challenges Overcome</label>
+          <textarea id="mProjChallenge" class="form-input text-sm" rows="2">${escapeHTML(challenge)}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono"><i class="fa-solid fa-bullseye text-emerald"></i> Measurable Impact</label>
+          <textarea id="mProjImpact" class="form-input text-sm" rows="2">${escapeHTML(impact)}</textarea>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label mono">Architecture &amp; System Design</label>
+        <textarea id="mProjArch" class="form-input text-sm" rows="2">${escapeHTML(architecture)}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label mono">Key Technical Features (One feature per line)</label>
+        <textarea id="mProjFeatures" class="form-input text-sm" rows="3">${escapeHTML(keyFeaturesList.join('\n'))}</textarea>
+      </div>
+
       <div class="grid grid--2col">
         <div class="form-group">
           <label class="form-label mono">GitHub URL</label>
@@ -553,6 +1234,7 @@ function openEditProjectModal(id) {
           <input type="url" id="mProjLive" class="form-input" value="${escapeAttr(p.live_url || '')}">
         </div>
       </div>
+
       <div class="form-check mt-3">
         <input type="checkbox" id="mProjPublish" class="form-check-input" ${p.is_published ? 'checked' : ''}>
         <label for="mProjPublish" class="form-check-label">Publish this project (Visible on live site)</label>
@@ -562,7 +1244,7 @@ function openEditProjectModal(id) {
 
   openEditModal(`Edit Project: ${p.title}`, html, async () => {
     const title = document.getElementById('mProjTitle').value.trim();
-    const desc = document.getElementById('mProjDesc').value.trim();
+    const overview = document.getElementById('mProjDesc').value.trim();
     const category = document.getElementById('mProjCategory').value;
     const order = parseInt(document.getElementById('mProjOrder').value) || 0;
     const tagsStr = document.getElementById('mProjTags').value;
@@ -572,15 +1254,35 @@ function openEditProjectModal(id) {
     const liveUrl = document.getElementById('mProjLive').value.trim() || null;
     const isPublished = document.getElementById('mProjPublish').checked;
 
-    if (!title || !desc) {
-      showToast('Title and Description are required.', 'error');
+    const focus = document.getElementById('mProjFocus').value.trim();
+    const problem = document.getElementById('mProjProblem').value.trim();
+    const solution = document.getElementById('mProjSolution').value.trim();
+    const challenge = document.getElementById('mProjChallenge').value.trim();
+    const impact = document.getElementById('mProjImpact').value.trim();
+    const architecture = document.getElementById('mProjArch').value.trim();
+    const keyFeatures = document.getElementById('mProjFeatures').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+    if (!title || !overview) {
+      showToast('Title and Overview are required.', 'error');
       return false;
     }
+
+    const descObj = {
+      overview,
+      engineeringFocus: focus,
+      problem,
+      solution,
+      challenge,
+      impact,
+      architecture,
+      keyFeatures
+    };
+    const descPayload = JSON.stringify(descObj);
 
     const supabase = window.getSupabase();
     const { error } = await supabase.from('projects').update({
       title,
-      description: desc,
+      description: descPayload,
       category,
       display_order: order,
       tags,
@@ -595,11 +1297,11 @@ function openEditProjectModal(id) {
       return false;
     }
 
-    showToast('Project updated successfully.', 'success');
+    showToast('Project and specifications updated successfully.', 'success');
     loadProjects();
     loadOverviewMetrics();
     return true;
-  });
+  }, true);
 }
 
 async function toggleProjectPublish(id, currentStatus) {
@@ -712,12 +1414,21 @@ function renderSkillsTable(skills) {
 }
 
 function filterSkillsTable() {
-  const query = document.getElementById('skillSearchInput').value.toLowerCase();
-  const filtered = cachedSkills.filter(s => 
-    s.name.toLowerCase().includes(query) || 
-    s.category.toLowerCase().includes(query)
-  );
-  renderSkillsTable(filtered);
+  const query = (document.getElementById('skillSearchInput')?.value || '').toLowerCase().trim();
+  const catFilter = document.getElementById('skillCategoryFilter')?.value || 'all';
+
+  let list = [...cachedSkills];
+  if (catFilter !== 'all') {
+    list = list.filter(s => (s.category || '').toLowerCase() === catFilter.toLowerCase());
+  }
+  if (query) {
+    list = list.filter(s => 
+      (s.name || '').toLowerCase().includes(query) || 
+      (s.category || '').toLowerCase().includes(query) ||
+      (s.icon_class || '').toLowerCase().includes(query)
+    );
+  }
+  renderSkillsTable(list);
 }
 
 function openCreateSkillModal() {
@@ -928,6 +1639,21 @@ function renderExperienceTable(list) {
     `;
     tbody.appendChild(tr);
   });
+}
+
+function filterExperienceTable() {
+  const query = (document.getElementById('expSearchInput')?.value || '').toLowerCase().trim();
+  let list = [...cachedExperience];
+  if (query) {
+    list = list.filter(item => 
+      (item.role || '').toLowerCase().includes(query) ||
+      (item.company || '').toLowerCase().includes(query) ||
+      (item.location || '').toLowerCase().includes(query) ||
+      (item.description || '').toLowerCase().includes(query) ||
+      (item.highlights || []).some(h => h.toLowerCase().includes(query))
+    );
+  }
+  renderExperienceTable(list);
 }
 
 function openCreateExperienceModal() {
@@ -1155,10 +1881,13 @@ function renderEducationTable(list) {
       <td class="mono">${item.display_order}</td>
       <td>
         <div class="table-actions">
-          <button class="action-btn action-btn--publish" onclick="toggleEduPublish('${item.id}', ${item.is_published})">
+          <button class="action-btn action-btn--publish" title="Toggle Publish" onclick="toggleEduPublish('${item.id}', ${item.is_published})">
             <i class="fa-solid ${item.is_published ? 'fa-eye-slash' : 'fa-eye'}"></i>
           </button>
-          <button class="action-btn action-btn--delete" onclick="confirmDeleteEdu('${item.id}', '${escapeAttr(item.degree)}')">
+          <button class="action-btn" title="Edit Education" onclick="openEditEducationModal('${item.id}')">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+          <button class="action-btn action-btn--delete" title="Delete Education" onclick="confirmDeleteEdu('${item.id}', '${escapeAttr(item.degree)}')">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>
@@ -1166,6 +1895,20 @@ function renderEducationTable(list) {
     `;
     tbody.appendChild(tr);
   });
+}
+
+function filterEducationTable() {
+  const query = (document.getElementById('eduSearchInput')?.value || '').toLowerCase().trim();
+  let list = [...cachedEducation];
+  if (query) {
+    list = list.filter(item =>
+      (item.degree || '').toLowerCase().includes(query) ||
+      (item.institution || '').toLowerCase().includes(query) ||
+      (item.field_of_study || '').toLowerCase().includes(query) ||
+      (item.grade || '').toLowerCase().includes(query)
+    );
+  }
+  renderEducationTable(list);
 }
 
 function openCreateEducationModal() {
@@ -1178,6 +1921,10 @@ function openCreateEducationModal() {
       <div class="form-group">
         <label class="form-label mono">Institution / University *</label>
         <input type="text" id="mEduInst" class="form-input" placeholder="APJ Abdul Kalam Technological University" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label mono">Field of Study</label>
+        <input type="text" id="mEduField" class="form-input" placeholder="Computer Science and Engineering">
       </div>
       <div class="grid grid--2col">
         <div class="form-group">
@@ -1209,6 +1956,7 @@ function openCreateEducationModal() {
   openEditModal('Add Education', html, async () => {
     const degree = document.getElementById('mEduDegree').value.trim();
     const institution = document.getElementById('mEduInst').value.trim();
+    const field_of_study = document.getElementById('mEduField').value.trim() || null;
     const start_date = document.getElementById('mEduStart').value.trim();
     const end_date = document.getElementById('mEduEnd').value.trim() || null;
     const grade = document.getElementById('mEduGrade').value.trim() || null;
@@ -1222,11 +1970,84 @@ function openCreateEducationModal() {
 
     const supabase = window.getSupabase();
     const { error } = await supabase.from('education').insert([{
-      degree, institution, start_date, end_date, grade, display_order, is_published
+      degree, institution, field_of_study, start_date, end_date, grade, display_order, is_published
     }]);
 
     if (error) { showToast('Error: ' + error.message, 'error'); return false; }
     showToast('Education record added.', 'success');
+    loadEducation();
+    loadOverviewMetrics();
+    return true;
+  });
+}
+
+function openEditEducationModal(id) {
+  const item = cachedEducation.find(x => x.id === id);
+  if (!item) return;
+
+  const html = `
+    <form id="eduForm">
+      <div class="form-group">
+        <label class="form-label mono">Degree / Qualification *</label>
+        <input type="text" id="mEduDegree" class="form-input" value="${escapeAttr(item.degree)}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label mono">Institution / University *</label>
+        <input type="text" id="mEduInst" class="form-input" value="${escapeAttr(item.institution)}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label mono">Field of Study</label>
+        <input type="text" id="mEduField" class="form-input" value="${escapeAttr(item.field_of_study || '')}">
+      </div>
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono">Start Date *</label>
+          <input type="text" id="mEduStart" class="form-input" value="${escapeAttr(item.start_date)}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono">End Date</label>
+          <input type="text" id="mEduEnd" class="form-input" value="${escapeAttr(item.end_date || '')}">
+        </div>
+      </div>
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono">Grade / CGPA</label>
+          <input type="text" id="mEduGrade" class="form-input" value="${escapeAttr(item.grade || '')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label mono">Display Order</label>
+          <input type="number" id="mEduOrder" class="form-input" value="${item.display_order}">
+        </div>
+      </div>
+      <div class="form-check mt-3">
+        <input type="checkbox" id="mEduPublish" class="form-check-input" ${item.is_published ? 'checked' : ''}>
+        <label for="mEduPublish" class="form-check-label">Publish on portfolio</label>
+      </div>
+    </form>
+  `;
+
+  openEditModal(`Edit Education: ${item.degree}`, html, async () => {
+    const degree = document.getElementById('mEduDegree').value.trim();
+    const institution = document.getElementById('mEduInst').value.trim();
+    const field_of_study = document.getElementById('mEduField').value.trim() || null;
+    const start_date = document.getElementById('mEduStart').value.trim();
+    const end_date = document.getElementById('mEduEnd').value.trim() || null;
+    const grade = document.getElementById('mEduGrade').value.trim() || null;
+    const display_order = parseInt(document.getElementById('mEduOrder').value) || 0;
+    const is_published = document.getElementById('mEduPublish').checked;
+
+    if (!degree || !institution || !start_date) {
+      showToast('Degree, Institution, and Start Date are required.', 'error');
+      return false;
+    }
+
+    const supabase = window.getSupabase();
+    const { error } = await supabase.from('education').update({
+      degree, institution, field_of_study, start_date, end_date, grade, display_order, is_published
+    }).eq('id', id);
+
+    if (error) { showToast('Update error: ' + error.message, 'error'); return false; }
+    showToast('Education record updated.', 'success');
     loadEducation();
     loadOverviewMetrics();
     return true;
@@ -1277,10 +2098,13 @@ function renderCertsTable(list) {
       <td class="mono">${c.display_order}</td>
       <td>
         <div class="table-actions">
-          <button class="action-btn action-btn--publish" onclick="toggleCertPublish('${c.id}', ${c.is_published})">
+          <button class="action-btn action-btn--publish" title="Toggle Publish" onclick="toggleCertPublish('${c.id}', ${c.is_published})">
             <i class="fa-solid ${c.is_published ? 'fa-eye-slash' : 'fa-eye'}"></i>
           </button>
-          <button class="action-btn action-btn--delete" onclick="confirmDeleteCert('${c.id}', '${escapeAttr(c.title)}')">
+          <button class="action-btn" title="Edit Certification" onclick="openEditCertModal('${c.id}')">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+          <button class="action-btn action-btn--delete" title="Delete Certification" onclick="confirmDeleteCert('${c.id}', '${escapeAttr(c.title)}')">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </div>
@@ -1288,6 +2112,19 @@ function renderCertsTable(list) {
     `;
     tbody.appendChild(tr);
   });
+}
+
+function filterCertsTable() {
+  const query = (document.getElementById('certSearchInput')?.value || '').toLowerCase().trim();
+  let list = [...cachedCerts];
+  if (query) {
+    list = list.filter(item =>
+      (item.title || '').toLowerCase().includes(query) ||
+      (item.issuer || '').toLowerCase().includes(query) ||
+      (item.credential_id || '').toLowerCase().includes(query)
+    );
+  }
+  renderCertsTable(list);
 }
 
 function openCreateCertModal() {
@@ -1307,16 +2144,49 @@ function openCreateCertModal() {
           <input type="text" id="mCertDate" class="form-input" placeholder="2024">
         </div>
       </div>
-      <div class="grid grid--2col">
-        <div class="form-group">
-          <label class="form-label mono">Credential ID</label>
-          <input type="text" id="mCertId" class="form-input">
-        </div>
-        <div class="form-group">
-          <label class="form-label mono">Credential Verification URL</label>
-          <input type="url" id="mCertUrl" class="form-input" placeholder="https://...">
+      <div class="form-group">
+        <label class="form-label mono">Credential ID</label>
+        <input type="text" id="mCertId" class="form-input" placeholder="e.g. CERT-12345">
+      </div>
+
+      <!-- Certificate Badge / Document Photo Upload Widget -->
+      <div class="form-group">
+        <label class="form-label mono"><i class="fa-solid fa-award"></i> Certificate Badge / Photo / URL</label>
+        <div class="image-upload-widget">
+          <div class="image-preview-row">
+            <div class="image-preview-box" id="mCertBox">
+              <img id="mCertPreview" src="" alt="Cert preview" class="image-preview-img" style="display: none;" onerror="this.style.display='none'; document.getElementById('mCertPlaceholder').style.display='flex';">
+              <div id="mCertPlaceholder" class="image-preview-placeholder">
+                <i class="fa-solid fa-certificate"></i>
+                <span>No badge/doc</span>
+              </div>
+            </div>
+            <div class="image-controls-col">
+              <span class="mono text-sm text-muted">Upload certificate or badge (JPEG, PNG, WebP &le; 5 MB)</span>
+              <div class="image-btn-group">
+                <button type="button" class="btn btn--primary btn--sm" onclick="document.getElementById('mCertFileInput').click()">
+                  <i class="fa-solid fa-upload"></i> Upload / Change Photo
+                </button>
+                <button type="button" class="btn btn--outline btn--sm" onclick="openMediaPickerForTarget('mCertUrl', 'mCertPreview', 'mCertPlaceholder')">
+                  <i class="fa-solid fa-images"></i> Media Library
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" onclick="clearModalImageWidget('mCertUrl', 'mCertPreview', 'mCertPlaceholder')">
+                  <i class="fa-solid fa-trash-can"></i> Remove
+                </button>
+              </div>
+              <input type="file" id="mCertFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleModalImageUpload(event, 'mCertUrl', 'mCertPreview', 'mCertPlaceholder', 'mCertProgressWrap', 'mCertProgressBar', 'mCertStatus', 'uploads')">
+              <div id="mCertProgressWrap" style="display: none;" class="image-upload-progress">
+                <div class="progress-bar">
+                  <div id="mCertProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+                <span id="mCertStatus" class="mono text-sm text-muted">Uploading...</span>
+              </div>
+              <input type="url" id="mCertUrl" class="form-input text-sm mono mt-2" placeholder="Credential or image URL (auto-filled on upload or paste)" oninput="updateImageWidgetFromInput('mCertUrl', 'mCertPreview', 'mCertPlaceholder')">
+            </div>
+          </div>
         </div>
       </div>
+
       <div class="grid grid--2col">
         <div class="form-group">
           <label class="form-label mono">Display Order</label>
@@ -1357,6 +2227,109 @@ function openCreateCertModal() {
   });
 }
 
+function openEditCertModal(id) {
+  const c = cachedCerts.find(x => x.id === id);
+  if (!c) return;
+
+  const html = `
+    <form id="certForm">
+      <div class="form-group">
+        <label class="form-label mono">Certification Title *</label>
+        <input type="text" id="mCertTitle" class="form-input" value="${escapeAttr(c.title)}" required>
+      </div>
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono">Issuer / Academy *</label>
+          <input type="text" id="mCertIssuer" class="form-input" value="${escapeAttr(c.issuer)}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label mono">Issue Date</label>
+          <input type="text" id="mCertDate" class="form-input" value="${escapeAttr(c.issue_date || '')}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label mono">Credential ID</label>
+        <input type="text" id="mCertId" class="form-input" value="${escapeAttr(c.credential_id || '')}">
+      </div>
+
+      <!-- Certificate Badge / Document Photo Upload Widget -->
+      <div class="form-group">
+        <label class="form-label mono"><i class="fa-solid fa-award"></i> Certificate Badge / Photo / URL</label>
+        <div class="image-upload-widget">
+          <div class="image-preview-row">
+            <div class="image-preview-box" id="mCertBox">
+              <img id="mCertPreview" src="${escapeAttr(c.credential_url || '')}" alt="Cert preview" class="image-preview-img" style="${c.credential_url ? 'display: block;' : 'display: none;'}" onerror="this.style.display='none'; document.getElementById('mCertPlaceholder').style.display='flex';">
+              <div id="mCertPlaceholder" class="image-preview-placeholder" style="${c.credential_url ? 'display: none;' : 'display: flex;'}">
+                <i class="fa-solid fa-certificate"></i>
+                <span>No badge/doc</span>
+              </div>
+            </div>
+            <div class="image-controls-col">
+              <span class="mono text-sm text-muted">Upload certificate or badge (JPEG, PNG, WebP &le; 5 MB)</span>
+              <div class="image-btn-group">
+                <button type="button" class="btn btn--primary btn--sm" onclick="document.getElementById('mCertFileInput').click()">
+                  <i class="fa-solid fa-upload"></i> Upload / Change Photo
+                </button>
+                <button type="button" class="btn btn--outline btn--sm" onclick="openMediaPickerForTarget('mCertUrl', 'mCertPreview', 'mCertPlaceholder')">
+                  <i class="fa-solid fa-images"></i> Media Library
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" onclick="clearModalImageWidget('mCertUrl', 'mCertPreview', 'mCertPlaceholder')">
+                  <i class="fa-solid fa-trash-can"></i> Remove
+                </button>
+              </div>
+              <input type="file" id="mCertFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleModalImageUpload(event, 'mCertUrl', 'mCertPreview', 'mCertPlaceholder', 'mCertProgressWrap', 'mCertProgressBar', 'mCertStatus', 'uploads')">
+              <div id="mCertProgressWrap" style="display: none;" class="image-upload-progress">
+                <div class="progress-bar">
+                  <div id="mCertProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+                <span id="mCertStatus" class="mono text-sm text-muted">Uploading...</span>
+              </div>
+              <input type="url" id="mCertUrl" class="form-input text-sm mono mt-2" placeholder="Credential or image URL (auto-filled on upload or paste)" value="${escapeAttr(c.credential_url || '')}" oninput="updateImageWidgetFromInput('mCertUrl', 'mCertPreview', 'mCertPlaceholder')">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid--2col">
+        <div class="form-group">
+          <label class="form-label mono">Display Order</label>
+          <input type="number" id="mCertOrder" class="form-input" value="${c.display_order}">
+        </div>
+        <div class="form-check mt-4">
+          <input type="checkbox" id="mCertPublish" class="form-check-input" ${c.is_published ? 'checked' : ''}>
+          <label for="mCertPublish" class="form-check-label">Publish on portfolio</label>
+        </div>
+      </div>
+    </form>
+  `;
+
+  openEditModal(`Edit Certification: ${c.title}`, html, async () => {
+    const title = document.getElementById('mCertTitle').value.trim();
+    const issuer = document.getElementById('mCertIssuer').value.trim();
+    const issue_date = document.getElementById('mCertDate').value.trim() || null;
+    const credential_id = document.getElementById('mCertId').value.trim() || null;
+    const credential_url = document.getElementById('mCertUrl').value.trim() || null;
+    const display_order = parseInt(document.getElementById('mCertOrder').value) || 0;
+    const is_published = document.getElementById('mCertPublish').checked;
+
+    if (!title || !issuer) {
+      showToast('Title and Issuer are required.', 'error');
+      return false;
+    }
+
+    const supabase = window.getSupabase();
+    const { error } = await supabase.from('certifications').update({
+      title, issuer, issue_date, credential_id, credential_url, display_order, is_published
+    }).eq('id', id);
+
+    if (error) { showToast('Update failed: ' + error.message, 'error'); return false; }
+    showToast('Certification updated.', 'success');
+    loadCertifications();
+    loadOverviewMetrics();
+    return true;
+  });
+}
+
 async function toggleCertPublish(id, cur) {
   const supabase = window.getSupabase();
   const next = !cur;
@@ -1381,6 +2354,88 @@ function confirmDeleteCert(id, title) {
 let existingPublicProfileId = null;
 let existingPrivateProfileId = null;
 
+function handleAvatarFileSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  const pWrap = document.getElementById('profAvatarProgressWrap');
+  const pBar = document.getElementById('profAvatarProgressBar');
+  const pStatus = document.getElementById('profAvatarStatus');
+
+  if (pWrap) pWrap.style.display = 'block';
+  if (pBar) pBar.style.width = '35%';
+  if (pStatus) pStatus.textContent = `Uploading ${file.name}...`;
+
+  uploadMediaFile(file, 'uploads')
+    .then(res => {
+      if (pBar) pBar.style.width = '100%';
+      if (pStatus) pStatus.textContent = 'Uploaded successfully!';
+
+      const input = document.getElementById('profAvatarUrl');
+      if (input) input.value = res.publicUrl;
+
+      const img = document.getElementById('profAvatarPreview');
+      const ph = document.getElementById('profAvatarPlaceholder');
+      if (img) {
+        img.src = res.publicUrl;
+        img.style.display = 'block';
+      }
+      if (ph) ph.style.display = 'none';
+
+      showToast('Avatar uploaded! Click "Save Public Profile" to publish changes.', 'success');
+    })
+    .catch(err => {
+      showToast('Avatar upload failed: ' + err.message, 'error');
+      if (pStatus) pStatus.textContent = 'Upload failed: ' + err.message;
+    })
+    .finally(() => {
+      e.target.value = '';
+      setTimeout(() => {
+        if (pWrap) pWrap.style.display = 'none';
+        if (pBar) pBar.style.width = '0%';
+      }, 2000);
+    });
+}
+
+function resetProfileAvatarToDefault() {
+  const defaultAvatar = '/images/avatar.jpg';
+  const input = document.getElementById('profAvatarUrl');
+  if (input) input.value = defaultAvatar;
+
+  const img = document.getElementById('profAvatarPreview');
+  const ph = document.getElementById('profAvatarPlaceholder');
+  if (img) {
+    img.src = defaultAvatar;
+    img.style.display = 'block';
+  }
+  if (ph) ph.style.display = 'none';
+
+  showToast('Reset to default avatar (/images/avatar.jpg). Click Save to apply.', 'info');
+}
+
+function syncSocialLinksFromInputs() {
+  const gh = document.getElementById('profLinkGithub')?.value.trim() || '';
+  const li = document.getElementById('profLinkLinkedin')?.value.trim() || '';
+  const tw = document.getElementById('profLinkTwitter')?.value.trim() || '';
+  const ig = document.getElementById('profLinkInstagram')?.value.trim() || '';
+  const res = document.getElementById('profLinkResume')?.value.trim() || '';
+
+  let currentObj = {};
+  try {
+    const raw = document.getElementById('profSocialLinks')?.value.trim();
+    if (raw) currentObj = JSON.parse(raw);
+  } catch (e) {}
+
+  if (gh) currentObj.github = gh; else delete currentObj.github;
+  if (li) currentObj.linkedin = li; else delete currentObj.linkedin;
+  if (tw) currentObj.twitter = tw; else delete currentObj.twitter;
+  if (ig) currentObj.instagram = ig; else delete currentObj.instagram;
+  if (res) currentObj.resume = res; else delete currentObj.resume;
+
+  const container = document.getElementById('profSocialLinks');
+  if (container) container.value = JSON.stringify(currentObj, null, 2);
+}
+
 async function loadProfiles() {
   const supabase = window.getSupabase();
   if (!supabase) return;
@@ -1393,18 +2448,44 @@ async function loadProfiles() {
       document.getElementById('profFullName').value = pubData.full_name || '';
       document.getElementById('profHeadline').value = pubData.headline || '';
       document.getElementById('profLocation').value = pubData.location || '';
-      document.getElementById('profAvatarUrl').value = pubData.avatar_url || '';
       document.getElementById('profBio').value = pubData.bio || '';
-      document.getElementById('profSocialLinks').value = JSON.stringify(pubData.social_links || {}, null, 2);
       document.getElementById('profIsPublished').checked = !!pubData.is_published;
 
-      const badge = document.getElementById('publicProfileBadge');
-      if (pubData.is_published) {
-        badge.className = 'badge badge-emerald mono';
-        badge.textContent = 'Published';
+      // Avatar widget
+      const avatarUrl = pubData.avatar_url || '';
+      const avatarInput = document.getElementById('profAvatarUrl');
+      const avatarImg = document.getElementById('profAvatarPreview');
+      const avatarPh = document.getElementById('profAvatarPlaceholder');
+
+      if (avatarInput) avatarInput.value = avatarUrl;
+      if (avatarUrl) {
+        if (avatarImg) { avatarImg.src = avatarUrl; avatarImg.style.display = 'block'; }
+        if (avatarPh) avatarPh.style.display = 'none';
       } else {
-        badge.className = 'badge badge-amber mono';
-        badge.textContent = 'Draft';
+        if (avatarImg) { avatarImg.src = ''; avatarImg.style.display = 'none'; }
+        if (avatarPh) avatarPh.style.display = 'flex';
+      }
+
+      // Social Links
+      const sLinks = pubData.social_links || {};
+      if (document.getElementById('profSocialLinks')) {
+        document.getElementById('profSocialLinks').value = JSON.stringify(sLinks, null, 2);
+      }
+      if (document.getElementById('profLinkGithub')) document.getElementById('profLinkGithub').value = sLinks.github || '';
+      if (document.getElementById('profLinkLinkedin')) document.getElementById('profLinkLinkedin').value = sLinks.linkedin || '';
+      if (document.getElementById('profLinkTwitter')) document.getElementById('profLinkTwitter').value = sLinks.twitter || '';
+      if (document.getElementById('profLinkInstagram')) document.getElementById('profLinkInstagram').value = sLinks.instagram || '';
+      if (document.getElementById('profLinkResume')) document.getElementById('profLinkResume').value = sLinks.resume || '';
+
+      const badge = document.getElementById('publicProfileBadge');
+      if (badge) {
+        if (pubData.is_published) {
+          badge.className = 'badge badge-emerald mono';
+          badge.textContent = 'Published';
+        } else {
+          badge.className = 'badge badge-amber mono';
+          badge.textContent = 'Draft';
+        }
       }
     }
   } catch (err) {
@@ -1437,6 +2518,8 @@ async function savePublicProfile(e) {
   const avatar_url = document.getElementById('profAvatarUrl').value.trim() || null;
   const bio = document.getElementById('profBio').value.trim();
   const is_published = document.getElementById('profIsPublished').checked;
+
+  syncSocialLinksFromInputs();
 
   let social_links = {};
   try {
@@ -2091,13 +3174,22 @@ function closeConfirmModal() {
   pendingConfirmAction = null;
 }
 
-function openEditModal(title, bodyHTML, onSave) {
+function openEditModal(title, bodyHTML, onSave, isLarge = false) {
   document.getElementById('editModalTitle').textContent = title;
   document.getElementById('editModalBody').innerHTML = bodyHTML;
   pendingEditSaveAction = onSave;
-  document.getElementById('editModal').style.display = 'flex';
+
+  const card = document.getElementById('editModalCard');
+  if (card) {
+    if (isLarge) card.classList.add('modal-card--lg');
+    else card.classList.remove('modal-card--lg');
+  }
 
   const saveBtn = document.getElementById('editModalSaveBtn');
+  if (saveBtn) saveBtn.style.display = 'inline-flex';
+
+  document.getElementById('editModal').style.display = 'flex';
+
   saveBtn.onclick = async () => {
     saveBtn.disabled = true;
     saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
@@ -2117,6 +3209,10 @@ function openEditModal(title, bodyHTML, onSave) {
 
 function closeEditModal() {
   document.getElementById('editModal').style.display = 'none';
+  const card = document.getElementById('editModalCard');
+  if (card) card.classList.remove('modal-card--lg');
+  const saveBtn = document.getElementById('editModalSaveBtn');
+  if (saveBtn) saveBtn.style.display = 'inline-flex';
   pendingEditSaveAction = null;
 }
 
