@@ -452,9 +452,11 @@
     // Avatar / Photo synchronization
     if (profile.avatar_url) {
       const safeAvatar = sanitizeUrl(profile.avatar_url);
-      document.querySelectorAll('.profile-modal-img, .hero__portrait').forEach(img => {
-        img.src = safeAvatar;
-      });
+      if (safeAvatar) {
+        document.querySelectorAll('.profile-modal-img, .hero__portrait').forEach(img => {
+          img.src = safeAvatar;
+        });
+      }
     }
 
     // Social Links & Resume Synchronization
@@ -610,10 +612,14 @@
   function sanitizeUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string') return null;
     const trimmed = rawUrl.trim();
-    if (/^https?:\/\//i.test(trimmed)) {
+    if (/^(https?:\/\/|\/|images\/|\.\/)/i.test(trimmed)) {
       return trimmed;
     }
-    return null;
+    // Reject dangerous protocol injection
+    if (/^[a-z0-9+.-]+:/i.test(trimmed) && !/^https?:/i.test(trimmed)) {
+      return null;
+    }
+    return trimmed;
   }
 
 })();
