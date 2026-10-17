@@ -1,0 +1,18 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Vercel & build cache
+.vercel
+node_modules/
+
+# Logs & scratch
+*.log
+scratch/
+.system_generated/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Portfolio CMS Admin | Shahin Sha</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/admin/admin.css">
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Shared Supabase Client -->
+  <script src="/js/supabase-client.js"></script>
+</head>
+<body class="admin-body">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card modal-card--sm">
+      <div class="modal-header">
+        <h3 id="confirmTitle"><i class="fa-solid fa-triangle-exclamation text-amber"></i> Confirm Action</h3>
+        <button class="modal-close-btn" onclick="closeConfirmModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage">Are you sure you want to proceed?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--ghost" onclick="closeConfirmModal()">Cancel</button>
+        <button id="confirmActionBtn" class="btn btn--danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic Edit/Create Modal -->
+  <div id="editModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="editModalTitle">Edit Item</h3>
+        <button class="modal-close-btn" onclick="closeEditModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" id="editModalBody">
+        <!-- Dynamically populated form -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn--ghost" onclick="closeEditModal()">Cancel</button>
+        <button id="editModalSaveBtn" class="btn btn--primary">
+          <i class="fa-solid fa-floppy-disk"></i> Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       1. LOGIN VIEW (Shown when unauthenticated)
+  ========================================================================== -->
+  <div id="loginView" class="login-view">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-badge"><i class="fa-solid fa-terminal"></i></div>
+        <h2>SHAHIN SHA <span>ADMIN</span></h2>
+        <p class="mono text-muted">Dedicated Portfolio CMS Portal</p>
+      </div>
+
+      <div id="loginAlert" class="alert alert--danger" style="display: none;"></div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)" class="login-form">
+        <div class="form-group">
+          <label for="loginEmail" class="form-label mono"><i class="fa-solid fa-envelope"></i> Administrator Email</label>
+          <input type="email" id="loginEmail" class="form-input" placeholder="shahin.c.sha@gmail.com" required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword" class="form-label mono"><i class="fa-solid fa-lock"></i> Password</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••••••" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" id="loginBtn" class="btn btn--primary btn--block">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In to Dashboard
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <a href="/" class="link-subtle"><i class="fa-solid fa-arrow-left"></i> Back to Public Portfolio</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       2. DASHBOARD VIEW (Guarded; shown only when authenticated as admin)
+  ========================================================================== -->
+  <div id="dashboardView" class="dashboard-layout" style="display: none;">
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-badge"><i class="fa-solid fa-shield-halved"></i></div>
+        <div>
+          <h3>PORTFOLIO CMS</h3>
+          <span class="badge badge-cyan mono">SECURE ADMIN</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item is-active" data-section="overview" onclick="switchSection('overview')">
+          <i class="fa-solid fa-gauge"></i> Overview
+        </button>
+        <button class="nav-item" data-section="projects" onclick="switchSection('projects')">
+          <i class="fa-solid fa-folder-open"></i> Projects
+        </button>
+        <button class="nav-item" data-section="skills" onclick="switchSection('skills')">
+          <i class="fa-solid fa-brain"></i> Skills
+        </button>
+        <button class="nav-item" data-section="experience" onclick="switchSection('experience')">
+          <i class="fa-solid fa-briefcase"></i> Experience
+        </button>
+        <button class="nav-item" data-section="education" onclick="switchSection('education')">
+          <i class="fa-solid fa-graduation-cap"></i> Education
+        </button>
+        <button class="nav-item" data-section="certifications" onclick="switchSection('certifications')">
+          <i class="fa-solid fa-certificate"></i> Certifications
+        </button>
+        <button class="nav-item" data-section="profile" onclick="switchSection('profile')">
+          <i class="fa-solid fa-id-card"></i> Profile &amp; Contact
+        </button>
+        <button class="nav-item" data-section="media" onclick="switchSection('media')">
+          <i class="fa-solid fa-images"></i> Media Storage
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-avatar mono"><i class="fa-solid fa-user-gear"></i></div>
+          <div class="user-details">
+            <span id="userEmailBadge" class="user-email mono">shahin.c.sha@gmail.com</span>
+            <span class="user-role badge badge-indigo mono">SUPERADMIN</span>
+          </div>
+        </div>
+        <div class="sidebar-actions">
+          <a href="../" target="_blank" class="btn btn--outline btn--sm" title="View live portfolio website">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Live Site
+          </a>
+          <button onclick="handleLogout()" class="btn btn--danger-outline btn--sm" title="Sign out of Admin CMS">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+      <!-- Topbar Header -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <h2 id="topbarTitle">Dashboard Overview</h2>
+        </div>
+        <div class="topbar-right">
+          <span class="status-indicator">
+            <span class="status-dot"></span> <span class="mono text-muted">Database: yaxyqpwsxknahehhmtch</span>
+          </span>
+          <button onclick="refreshCurrentSection()" class="btn btn--ghost btn--sm" title="Refresh data">
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- Content Views Container -->
+      <div class="content-scroll">
+
+        <!-- -------------------------------------------------------------------
+             SECTION A: OVERVIEW
+        -------------------------------------------------------------------- -->
+        <section id="sec-overview" class="admin-section">
+          <div class="metrics-grid">
+            <div class="metric-card" onclick="switchSection('projects')">
+              <div class="metric-icon metric-icon--cyan"><i class="fa-solid fa-folder-open"></i></div>
+              <div class="metric-data">
+                <span class="metric-num" id="statProjects">0</span>
+                <span class="metric-label">Projects (<span id="statProjectsPub">0</span> Published)</span>
+              </div>
+            </div>
+
+            <div class="metric-card" onclick="switchSection('skills')">
+              <div class="metric-icon metric-icon--indigo"><i class="fa-solid fa-brain"></i></div>
+              <div class="metric-data">
+                <span class="metric-num" id="statSkills">0</span>
+                <span class="metric-label">Skills (<span id="statSkillsPub">0</span> Published)</span>
+              </div>
+            </div>
+
+            <div class="metric-card" onclick="switchSection('experience')">
+              <div class="metric-icon metric-icon--purple"><i class="fa-solid fa-briefcase"></i></div>
+              <div class="metric-data">
+                <span class="metric-num" id="statExp">0</span>
+                <span class="metric-label">Experience (<span id="statExpPub">0</span> Published)</span>
+              </div>
+            </div>
+
+            <div class="metric-card" onclick="switchSection('education')">
+              <div class="metric-icon metric-icon--emerald"><i class="fa-solid fa-graduation-cap"></i></div>
+              <div class="metric-data">
+                <span class="metric-num" id="statEdu">0</span>
+                <span class="metric-label">Education (<span id="statEduPub">0</span> Published)</span>
+              </div>
+            </div>
+
+            <div class="metric-card" onclick="switchSection('certifications')">
+              <div class="metric-icon metric-icon--amber"><i class="fa-solid fa-certificate"></i></div>
+              <div class="metric-data">
+                <span class="metric-num" id="statCerts">0</span>
+                <span class="metric-label">Certifications (<span id="statCertsPub">0</span> Published)</span>
+              </div>
+            </div>
+
+            <div class="metric-card" onclick="switchSection('media')">
+              <div class="metric-icon metric-icon--rose"><i class="fa-solid fa-images"></i></div>
+              <div class="metric-data">
+                <span class="metric-num" id="statMedia">0</span>
+                <span class="metric-label">Media Files in Bucket</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Seed / Import helper -->
+          <div class="card mt-6">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-database text-cyan"></i> Database Content Status</h3>
+            </div>
+            <div class="card-body">
+              <p class="text-muted">
+                Your dedicated Supabase project is active with Row Level Security enabled. 
+                Public visitors see only items with <span class="badge badge-emerald mono">is_published: true</span>. 
+                If database tables are empty, your live portfolio uses its built-in static HTML fallback seamlessly.
+              </p>
+              <div class="action-bar mt-4">
+                <button onclick="promptImportStaticContent()" class="btn btn--primary">
+                  <i class="fa-solid fa-file-import"></i> Seed / Import Initial Portfolio Content
+                </button>
+                <button onclick="switchSection('projects')" class="btn btn--outline">
+                  <i class="fa-solid fa-plus"></i> Add New Project
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION B: PROJECTS
+        -------------------------------------------------------------------- -->
+        <section id="sec-projects" class="admin-section" style="display: none;">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="projectSearchInput" placeholder="Search projects..." oninput="filterProjectTable()">
+            </div>
+            <div class="toolbar-actions">
+              <button onclick="openCreateProjectModal()" class="btn btn--primary">
+                <i class="fa-solid fa-plus"></i> Add Project
+              </button>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">#</th>
+                  <th>Project</th>
+                  <th>Category</th>
+                  <th>Tags</th>
+                  <th>Status</th>
+                  <th>Order</th>
+                  <th style="width: 150px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="projectsTableBody">
+                <tr><td colspan="7" class="text-center text-muted py-6">Loading projects...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION C: SKILLS
+        -------------------------------------------------------------------- -->
+        <section id="sec-skills" class="admin-section" style="display: none;">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="skillSearchInput" placeholder="Search skills..." oninput="filterSkillsTable()">
+            </div>
+            <div class="toolbar-actions">
+              <button onclick="openCreateSkillModal()" class="btn btn--primary">
+                <i class="fa-solid fa-plus"></i> Add Skill
+              </button>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Skill Name</th>
+                  <th>Category</th>
+                  <th>Icon Class</th>
+                  <th>Proficiency</th>
+                  <th>Status</th>
+                  <th>Order</th>
+                  <th style="width: 150px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="skillsTableBody">
+                <tr><td colspan="7" class="text-center text-muted py-6">Loading skills...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION D: EXPERIENCE
+        -------------------------------------------------------------------- -->
+        <section id="sec-experience" class="admin-section" style="display: none;">
+          <div class="section-toolbar">
+            <div><h3>Experience &amp; Roles</h3></div>
+            <div class="toolbar-actions">
+              <button onclick="openCreateExperienceModal()" class="btn btn--primary">
+                <i class="fa-solid fa-plus"></i> Add Experience
+              </button>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Company</th>
+                  <th>Period</th>
+                  <th>Status</th>
+                  <th>Order</th>
+                  <th style="width: 150px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="experienceTableBody">
+                <tr><td colspan="6" class="text-center text-muted py-6">Loading experience...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION E: EDUCATION
+        -------------------------------------------------------------------- -->
+        <section id="sec-education" class="admin-section" style="display: none;">
+          <div class="section-toolbar">
+            <div><h3>Academic Background</h3></div>
+            <div class="toolbar-actions">
+              <button onclick="openCreateEducationModal()" class="btn btn--primary">
+                <i class="fa-solid fa-plus"></i> Add Education
+              </button>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Degree</th>
+                  <th>Institution</th>
+                  <th>Period</th>
+                  <th>Grade</th>
+                  <th>Status</th>
+                  <th>Order</th>
+                  <th style="width: 150px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="educationTableBody">
+                <tr><td colspan="7" class="text-center text-muted py-6">Loading education...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION F: CERTIFICATIONS
+        -------------------------------------------------------------------- -->
+        <section id="sec-certifications" class="admin-section" style="display: none;">
+          <div class="section-toolbar">
+            <div><h3>Certifications &amp; Credentials</h3></div>
+            <div class="toolbar-actions">
+              <button onclick="openCreateCertModal()" class="btn btn--primary">
+                <i class="fa-solid fa-plus"></i> Add Certification
+              </button>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Certification</th>
+                  <th>Issuer</th>
+                  <th>Date</th>
+                  <th>Credential</th>
+                  <th>Status</th>
+                  <th>Order</th>
+                  <th style="width: 150px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="certsTableBody">
+                <tr><td colspan="7" class="text-center text-muted py-6">Loading certifications...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION G: PROFILE & CONTACT
+        -------------------------------------------------------------------- -->
+        <section id="sec-profile" class="admin-section" style="display: none;">
+          <div class="grid grid--2col">
+
+            <!-- Public Profile Card -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3><i class="fa-solid fa-globe text-cyan"></i> Public Profile</h3>
+                  <p class="text-muted text-sm">Visible on public portfolio when published</p>
+                </div>
+                <span id="publicProfileBadge" class="badge badge-amber mono">Draft</span>
+              </div>
+              <div class="card-body">
+                <form id="publicProfileForm" onsubmit="savePublicProfile(event)">
+                  <div class="form-group">
+                    <label class="form-label mono">Full Name</label>
+                    <input type="text" id="profFullName" class="form-input" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Headline / Title</label>
+                    <input type="text" id="profHeadline" class="form-input" placeholder="Full-Stack Developer">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Location</label>
+                    <input type="text" id="profLocation" class="form-input" placeholder="Kerala, India">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Avatar Image URL</label>
+                    <div class="input-with-action">
+                      <input type="url" id="profAvatarUrl" class="form-input" placeholder="https://...">
+                      <button type="button" onclick="switchSection('media')" class="btn btn--outline btn--sm">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload
+                      </button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Bio Summary</label>
+                    <textarea id="profBio" class="form-input" rows="4"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Social Links (JSON)</label>
+                    <textarea id="profSocialLinks" class="form-input mono text-sm" rows="3" placeholder='{"github":"https://...","linkedin":"https://..."}'></textarea>
+                  </div>
+                  <div class="form-check mt-3">
+                    <input type="checkbox" id="profIsPublished" class="form-check-input">
+                    <label for="profIsPublished" class="form-check-label">Publish Public Profile to Live Site</label>
+                  </div>
+                  <div class="mt-4">
+                    <button type="submit" class="btn btn--primary">
+                      <i class="fa-solid fa-floppy-disk"></i> Save Public Profile
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Private Admin Contact Card -->
+            <div class="card card--locked">
+              <div class="card-header">
+                <div>
+                  <h3><i class="fa-solid fa-lock text-rose"></i> Private Administrator Details</h3>
+                  <p class="text-muted text-sm text-rose">Protected by PostgreSQL RLS. Never accessible to public.</p>
+                </div>
+                <span class="badge badge-rose mono">PRIVATE</span>
+              </div>
+              <div class="card-body">
+                <form id="privateProfileForm" onsubmit="savePrivateProfile(event)">
+                  <div class="form-group">
+                    <label class="form-label mono">Primary Administrator Email</label>
+                    <input type="email" id="privEmail" class="form-input" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Private Phone Number</label>
+                    <input type="text" id="privPhone" class="form-input" placeholder="+91 ...">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Private Physical Address</label>
+                    <textarea id="privAddress" class="form-input" rows="3"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label mono">Confidential Administrative Notes</label>
+                    <textarea id="privNotes" class="form-input" rows="3" placeholder="Private internal deployment notes, recovery procedures, etc."></textarea>
+                  </div>
+                  <div class="mt-4">
+                    <button type="submit" class="btn btn--danger">
+                      <i class="fa-solid fa-shield-halved"></i> Save Private Records
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------------------
+             SECTION H: MEDIA STORAGE
+        -------------------------------------------------------------------- -->
+        <section id="sec-media" class="admin-section" style="display: none;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3><i class="fa-solid fa-cloud-arrow-up text-cyan"></i> Upload Media Asset</h3>
+                <p class="text-muted text-sm">Target Bucket: <strong class="mono text-cyan">portfolio-media</strong> (Public CDN)</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="upload-zone" id="uploadZone">
+                <i class="fa-solid fa-file-arrow-up upload-icon"></i>
+                <p class="upload-title">Choose image file or drag &amp; drop</p>
+                <p class="upload-subtitle mono text-sm">Formats: JPEG, PNG, WEBP only &bull; Max 5 MB &bull; SVGs forbidden</p>
+                <input type="file" id="mediaFileInput" accept="image/jpeg,image/png,image/webp" style="display: none;" onchange="handleFileSelect(event)">
+                <button type="button" onclick="document.getElementById('mediaFileInput').click()" class="btn btn--primary mt-4">
+                  <i class="fa-solid fa-folder-open"></i> Select Image File
+                </button>
+              </div>
+
+              <div id="uploadProgressContainer" style="display: none;" class="mt-4">
+                <div class="progress-bar">
+                  <div id="uploadProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+                <p id="uploadStatusText" class="mono text-sm text-muted mt-2">Uploading...</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-6">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-photo-film"></i> Uploaded Assets</h3>
+              <button onclick="loadMediaGallery()" class="btn btn--ghost btn--sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="card-body">
+              <div id="mediaGalleryGrid" class="media-grid">
+                <p class="text-muted text-center py-6" style="grid-column: 1 / -1;">No media files uploaded yet.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Main Admin Logic -->
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

@@ -368,9 +368,45 @@
   height: 380px;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 2px solid rgba(45, 212, 191, 0.4);
-  box-shadow: 0 0 60px -10px rgba(45, 212, 191, 0.35);
+  border: 1px solid rgba(45, 212, 191, 0.45);
+  box-shadow: 0 12px 35px -10px rgba(0, 0, 0, 0.7), 0 0 35px rgba(45, 212, 191, 0.25);
   background: var(--bg-panel);
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hero__portrait-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.75), rgba(99, 102, 241, 0.45), rgba(45, 212, 191, 0.1));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.4s ease;
+  opacity: 0.6;
+}
+
+.hero__portrait-wrap:hover::before,
+.hero__portrait-wrap.is-touching::before {
+  opacity: 1;
+}
+
+.hero__portrait-wrap:hover,
+.hero__portrait-wrap.is-touching {
+  border-color: rgba(45, 212, 191, 0.85);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.8), 0 0 45px rgba(45, 212, 191, 0.45), 0 0 80px rgba(99, 102, 241, 0.25);
+}
+
+.hero__portrait-wrap:active {
+  transform: scale(0.985);
 }
 
 .hero__portrait {
@@ -378,6 +414,54 @@
   height: 100%;
   object-fit: cover;
   object-position: center top;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.45s ease;
+  display: block;
+}
+
+.hero__portrait-wrap:hover .hero__portrait,
+.hero__portrait-wrap.is-touching .hero__portrait {
+  transform: scale(1.05);
+  filter: brightness(1.05) contrast(1.02);
+}
+
+/* Dynamic Interactive Glare Overlay */
+.hero__portrait-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.22) 0%, rgba(45, 212, 191, 0.1) 30%, transparent 65%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.hero__portrait-wrap:hover .hero__portrait-glare,
+.hero__portrait-wrap.is-touching .hero__portrait-glare {
+  opacity: 1;
+}
+
+/* Touch & Tap Ripple Wave */
+.hero__portrait-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.55) 0%, rgba(99, 102, 241, 0.25) 50%, transparent 75%);
+  pointer-events: none;
+  z-index: 4;
+  transform: translate(-50%, -50%) scale(0);
+  animation: photoRipple 0.75s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes photoRipple {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.85;
+  }
+  100% {
+    width: 480px;
+    height: 480px;
+    opacity: 0;
+  }
 }
 
 .hero__portrait-caption {
@@ -789,20 +873,41 @@
 }
 
 .project-card {
-  background: var(--bg-panel);
+  position: relative;
+  background: radial-gradient(550px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(45, 212, 191, 0.08), transparent 45%), var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 28px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.35s ease, box-shadow 0.35s ease;
+  overflow: hidden;
+}
+
+.project-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), rgba(99, 102, 241, 0.8), transparent);
+  opacity: 0;
+  transform: translateX(-100%);
+  transition: opacity 0.4s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.project-card:hover::before {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .project-card:hover {
-  transform: translateY(-6px);
-  border-color: rgba(45, 212, 191, 0.45);
-  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.6);
+  transform: translateY(-8px);
+  border-color: rgba(45, 212, 191, 0.65);
+  box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.75), 0 0 35px rgba(45, 212, 191, 0.2);
 }
 
 .project-card__top {
@@ -941,12 +1046,54 @@
   font-weight: 600;
   color: var(--accent);
   text-decoration: none;
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
 }
 
 .project-link:hover {
   color: #fff;
   transform: translateY(-2px);
+  text-shadow: 0 0 12px rgba(45, 212, 191, 0.4);
+}
+
+.project-link i.fa-arrow-up-right-from-square {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.project-link:hover i.fa-arrow-up-right-from-square {
+  transform: translate(2px, -2px);
+}
+
+.live-pulse {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  position: relative;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+
+.live-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid #10b981;
+  animation: liveRadar 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+@keyframes liveRadar {
+  0% {
+    transform: scale(0.7);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
 }
 
 .auth-req-badge {
@@ -2524,17 +2671,6 @@ body:hover .cursor-spotlight {
 }
 
 /* 6. Professional Profile Spotlight Modal */
-.hero__portrait-wrap {
-  cursor: pointer;
-  position: relative;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
-}
-
-.hero__portrait-wrap:hover {
-  transform: translateY(-4px);
-  border-color: var(--accent);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(45, 212, 191, 0.2);
-}
 
 .portrait-badge {
   position: absolute;
@@ -2735,4 +2871,47 @@ body:hover .cursor-spotlight {
   .profile-modal-specs-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 7. Enhanced Scroll Reveal & Card Spotlight Animations */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-on-scroll.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.project-stack .badge,
+.skill-category-pill,
+.learning-topic-pill {
+  transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.project-stack .badge:hover,
+.skill-category-pill:hover,
+.learning-topic-pill:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(45, 212, 191, 0.2);
+}
+
+.pillar-card,
+.principle-card,
+.stat-card,
+.about__card {
+  position: relative;
+  background: radial-gradient(500px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(45, 212, 191, 0.06), transparent 50%), var(--bg-panel);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.pillar-card:hover,
+.principle-card:hover,
+.stat-card:hover {
+  border-color: rgba(45, 212, 191, 0.5);
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.7), 0 0 25px rgba(45, 212, 191, 0.15);
 }
