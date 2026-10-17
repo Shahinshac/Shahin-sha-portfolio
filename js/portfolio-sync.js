@@ -42,12 +42,22 @@
       .select('*')
       .eq('is_published', true)
       .order('display_order', { ascending: true })
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
 
     if (projErr) {
       console.warn('[PortfolioSync] Projects fetch error:', projErr.message);
     } else if (Array.isArray(projects) && projects.length > 0) {
-      renderDynamicProjects(projects);
+      // Safe deduplication: keep only one authentic card per normalized project title
+      const uniqueProjects = [];
+      const seenTitles = new Set();
+      projects.forEach(p => {
+        const norm = (p.title || '').trim().toLowerCase();
+        if (!seenTitles.has(norm)) {
+          seenTitles.add(norm);
+          uniqueProjects.push(p);
+        }
+      });
+      renderDynamicProjects(uniqueProjects);
     } else {
       console.log('[PortfolioSync] Zero published database projects; preserving static portfolio.');
     }
@@ -74,10 +84,21 @@
         .from('education')
         .select('*')
         .eq('is_published', true)
-        .order('display_order', { ascending: true });
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
 
       if (Array.isArray(eduList) && eduList.length > 0) {
-        renderDynamicEducation(eduList);
+        // Safe deduplication: keep only one entry per degree/institution
+        const uniqueEdu = [];
+        const seenEdu = new Set();
+        eduList.forEach(item => {
+          const norm = `${item.degree}:::${item.institution}`.trim().toLowerCase();
+          if (!seenEdu.has(norm)) {
+            seenEdu.add(norm);
+            uniqueEdu.push(item);
+          }
+        });
+        renderDynamicEducation(uniqueEdu);
       }
     } catch (e) {
       console.warn('[PortfolioSync] Education sync warning:', e);

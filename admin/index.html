@@ -249,9 +249,12 @@
                 Public visitors see only items with <span class="badge badge-emerald mono">is_published: true</span>. 
                 If database tables are empty, your live portfolio uses its built-in static HTML fallback seamlessly.
               </p>
-              <div class="action-bar mt-4">
-                <button onclick="promptImportStaticContent()" class="btn btn--primary">
+              <div class="action-bar mt-4" style="flex-wrap: wrap; gap: 10px;">
+                <button onclick="promptImportStaticContent()" class="btn btn--primary" id="btnSeedContent">
                   <i class="fa-solid fa-file-import"></i> Seed / Import Initial Portfolio Content
+                </button>
+                <button onclick="cleanupDuplicates()" class="btn btn--danger" id="btnCleanupDups" style="display: none;">
+                  <i class="fa-solid fa-broom"></i> Clean Up Duplicate Records (<span id="dupCountBadge">0</span>)
                 </button>
                 <button onclick="switchSection('projects')" class="btn btn--outline">
                   <i class="fa-solid fa-plus"></i> Add New Project

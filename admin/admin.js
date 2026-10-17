@@ -271,6 +271,59 @@ async function loadOverviewMetrics() {
 
     const mediaList = mediaRes.data || [];
     document.getElementById('statMedia').textContent = mediaList.length;
+
+    // Detect duplicate records across collections
+    const projTitles = new Set();
+    let dupProjCount = 0;
+    projs.forEach(p => {
+      const k = (p.title || '').trim().toLowerCase();
+      if (projTitles.has(k)) dupProjCount++;
+      else projTitles.add(k);
+    });
+
+    const skillNames = new Set();
+    let dupSkillCount = 0;
+    skills.forEach(s => {
+      const k = (s.name || '').trim().toLowerCase();
+      if (skillNames.has(k)) dupSkillCount++;
+      else skillNames.add(k);
+    });
+
+    const expRoles = new Set();
+    let dupExpCount = 0;
+    exp.forEach(e => {
+      const k = `${e.role}:::${e.company}`.trim().toLowerCase();
+      if (expRoles.has(k)) dupExpCount++;
+      else expRoles.add(k);
+    });
+
+    const eduDegs = new Set();
+    let dupEduCount = 0;
+    edu.forEach(ed => {
+      const k = `${ed.degree}:::${ed.institution}`.trim().toLowerCase();
+      if (eduDegs.has(k)) dupEduCount++;
+      else eduDegs.add(k);
+    });
+
+    const certTitles = new Set();
+    let dupCertCount = 0;
+    certs.forEach(c => {
+      const k = (c.title || '').trim().toLowerCase();
+      if (certTitles.has(k)) dupCertCount++;
+      else certTitles.add(k);
+    });
+
+    const totalDups = dupProjCount + dupSkillCount + dupExpCount + dupEduCount + dupCertCount;
+    const dupBtn = document.getElementById('btnCleanupDups');
+    const dupBadge = document.getElementById('dupCountBadge');
+    if (dupBtn && dupBadge) {
+      if (totalDups > 0) {
+        dupBadge.textContent = totalDups;
+        dupBtn.style.display = 'inline-flex';
+      } else {
+        dupBtn.style.display = 'none';
+      }
+    }
   } catch (err) {
     console.error('Error loading metrics:', err);
   }
@@ -1580,19 +1633,44 @@ function confirmDeleteMedia(fileName) {
 }
 
 /* ==========================================================================
-   10. SEED / IMPORT INITIAL CONTENT
+   10. SEED / IMPORT INITIAL CONTENT & DEDUPLICATION
    ========================================================================== */
 
+let isImportingContent = false;
+let isCleaningDuplicates = false;
+
 async function promptImportStaticContent() {
+  if (isImportingContent) {
+    showToast('Import already in progress...', 'info');
+    return;
+  }
+
   openConfirmModal(
     'Import & Synchronize All Portfolio Content',
     'This will import all 8 verified projects, 22 technical skills, work experience, 3 academic qualifications, 3 certifications, and verified profile records into Supabase. Existing records will be safely preserved without duplicates. Proceed?',
     async () => {
-      const supabase = window.getSupabase();
-      if (!supabase) return;
+      if (isImportingContent) return;
+      isImportingContent = true;
 
-      // 1. Projects (All 8 verified portfolio systems from index.html)
-      const initialProjects = [
+      const actionBtn = document.getElementById('confirmActionBtn');
+      if (actionBtn) {
+        actionBtn.disabled = true;
+        actionBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
+      }
+
+      const supabase = window.getSupabase();
+      if (!supabase) {
+        isImportingContent = false;
+        if (actionBtn) {
+          actionBtn.disabled = false;
+          actionBtn.textContent = 'Confirm Action';
+        }
+        return;
+      }
+
+      try {
+        // 1. Projects (All 8 verified portfolio systems from index.html)
+        const initialProjects = [
         {
           title: 'HospitalOS + PharmacyERP',
           category: 'fullstack',
@@ -1848,9 +1926,143 @@ async function promptImportStaticContent() {
         }]);
       }
 
-      showToast(`Synchronized ${projsToInsert.length} projects, ${skillsToInsert.length} skills, ${eduToInsert.length} education, and ${certsToInsert.length} certs!`, 'success');
-      loadOverviewMetrics();
-      loadSectionData(currentSection);
+        showToast(`Synchronized ${projsToInsert.length} projects, ${skillsToInsert.length} skills, ${eduToInsert.length} education, and ${certsToInsert.length} certs!`, 'success');
+        loadOverviewMetrics();
+        loadSectionData(currentSection);
+      } catch (err) {
+        showToast('Import failed: ' + err.message, 'error');
+      } finally {
+        isImportingContent = false;
+        if (actionBtn) {
+          actionBtn.disabled = false;
+          actionBtn.textContent = 'Confirm Action';
+        }
+      }
+    }
+  );
+}
+
+async function cleanupDuplicates() {
+  if (isCleaningDuplicates) {
+    showToast('Cleanup already in progress...', 'info');
+    return;
+  }
+
+  openConfirmModal(
+    'Clean Up Duplicate Database Records',
+    'This will safely inspect projects, skills, experience, education, and certifications, retaining the authentic primary record for each genuine item and deleting exact duplicates. Proceed?',
+    async () => {
+      if (isCleaningDuplicates) return;
+      isCleaningDuplicates = true;
+
+      const actionBtn = document.getElementById('confirmActionBtn');
+      if (actionBtn) {
+        actionBtn.disabled = true;
+        actionBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cleaning...';
+      }
+
+      const supabase = window.getSupabase();
+      if (!supabase || !activeAdminSession) {
+        isCleaningDuplicates = false;
+        showToast('Administrator session required for database cleanup.', 'error');
+        if (actionBtn) {
+          actionBtn.disabled = false;
+          actionBtn.textContent = 'Confirm Action';
+        }
+        return;
+      }
+
+      try {
+        showToast('Scanning collections for duplicate records...', 'info');
+
+        // 1. Projects - keep earliest created
+        const { data: projs } = await supabase.from('projects').select('*').order('created_at', { ascending: true });
+        const seenProjTitles = new Set();
+        const projDups = [];
+        (projs || []).forEach(p => {
+          const k = (p.title || '').trim().toLowerCase();
+          if (seenProjTitles.has(k)) projDups.push(p.id);
+          else seenProjTitles.add(k);
+        });
+        if (projDups.length > 0) {
+          const { error } = await supabase.from('projects').delete().in('id', projDups);
+          if (error) throw new Error('Projects deletion failed: ' + error.message);
+        }
+
+        // 2. Skills
+        const { data: skills } = await supabase.from('skills').select('*').order('created_at', { ascending: true });
+        const seenSkills = new Set();
+        const skillDups = [];
+        (skills || []).forEach(s => {
+          const k = (s.name || '').trim().toLowerCase();
+          if (seenSkills.has(k)) skillDups.push(s.id);
+          else seenSkills.add(k);
+        });
+        if (skillDups.length > 0) {
+          const { error } = await supabase.from('skills').delete().in('id', skillDups);
+          if (error) throw new Error('Skills deletion failed: ' + error.message);
+        }
+
+        // 3. Experience
+        const { data: exp } = await supabase.from('experience').select('*').order('created_at', { ascending: true });
+        const seenExp = new Set();
+        const expDups = [];
+        (exp || []).forEach(e => {
+          const k = `${(e.role || '').trim()}:::${(e.company || '').trim()}`.toLowerCase();
+          if (seenExp.has(k)) expDups.push(e.id);
+          else seenExp.add(k);
+        });
+        if (expDups.length > 0) {
+          const { error } = await supabase.from('experience').delete().in('id', expDups);
+          if (error) throw new Error('Experience deletion failed: ' + error.message);
+        }
+
+        // 4. Education
+        const { data: edu } = await supabase.from('education').select('*').order('created_at', { ascending: true });
+        const seenEdu = new Set();
+        const eduDups = [];
+        (edu || []).forEach(ed => {
+          const k = `${(ed.degree || '').trim()}:::${(ed.institution || '').trim()}`.toLowerCase();
+          if (seenEdu.has(k)) eduDups.push(ed.id);
+          else seenEdu.add(k);
+        });
+        if (eduDups.length > 0) {
+          const { error } = await supabase.from('education').delete().in('id', eduDups);
+          if (error) throw new Error('Education deletion failed: ' + error.message);
+        }
+
+        // 5. Certifications
+        const { data: certs } = await supabase.from('certifications').select('*').order('created_at', { ascending: true });
+        const seenCerts = new Set();
+        const certDups = [];
+        (certs || []).forEach(c => {
+          const k = (c.title || '').trim().toLowerCase();
+          if (seenCerts.has(k)) certDups.push(c.id);
+          else seenCerts.add(k);
+        });
+        if (certDups.length > 0) {
+          const { error } = await supabase.from('certifications').delete().in('id', certDups);
+          if (error) throw new Error('Certifications deletion failed: ' + error.message);
+        }
+
+        const totalRemoved = projDups.length + skillDups.length + expDups.length + eduDups.length + certDups.length;
+        if (totalRemoved > 0) {
+          showToast(`Cleanup complete! Removed ${totalRemoved} duplicates (${projDups.length} projects, ${skillDups.length} skills, ${expDups.length} exp, ${eduDups.length} edu, ${certDups.length} certs).`, 'success');
+        } else {
+          showToast('Database is already clean. Zero duplicate records found.', 'info');
+        }
+
+        loadOverviewMetrics();
+        loadSectionData(currentSection);
+      } catch (err) {
+        showToast('Cleanup failed: ' + err.message, 'error');
+      } finally {
+        isCleaningDuplicates = false;
+        if (actionBtn) {
+          actionBtn.disabled = false;
+          actionBtn.textContent = 'Confirm Action';
+        }
+      }
     }
   );
 }
