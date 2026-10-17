@@ -327,18 +327,17 @@ async function loadOverviewMetrics() {
     const dupBtn = document.getElementById('btnCleanupDups');
     const dupBadge = document.getElementById('dupCountBadge');
     if (dupBtn) {
+      dupBtn.style.display = 'inline-flex';
       if (totalDups > 0) {
         if (dupBadge) {
           dupBadge.textContent = ` (${totalDups})`;
           dupBadge.style.display = 'inline';
         }
-        dupBtn.style.display = 'inline-flex';
       } else {
         if (dupBadge) {
           dupBadge.textContent = '';
           dupBadge.style.display = 'none';
         }
-        dupBtn.style.display = 'none';
       }
     }
   } catch (err) {
